@@ -157,6 +157,7 @@ class AgentSkill(BaseModel):
     examples: list[str] = Field(default_factory=list)
     inputModes: list[str] = Field(default_factory=lambda: ["text/plain"])
     outputModes: list[str] = Field(default_factory=lambda: ["text/plain"])
+    inputSchema: Optional[dict[str, Any]] = None
 
 
 class AgentCapabilities(BaseModel):
@@ -403,6 +404,109 @@ def create_webshop_plus_agent_card(base_url: str) -> AgentCard:
     Returns:
         An AgentCard for the WebShop+ benchmark.
     """
+    # Common schema for participants - required for all skills
+    participants_schema = {
+        "type": "object",
+        "properties": {
+            "shopper": {
+                "type": "string",
+                "format": "uri",
+                "description": "The A2A endpoint URL of the shopping agent to evaluate.",
+            }
+        },
+        "required": ["shopper"],
+    }
+
+    # Full assessment config schema
+    full_config_schema = {
+        "type": "object",
+        "properties": {
+            "num_tasks": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "default": 80,
+                "description": "Total number of tasks to run across all categories.",
+            },
+            "categories": {
+                "type": "array",
+                "items": {
+                    "type": "string",
+                    "enum": [
+                        "budget",
+                        "memory",
+                        "constraint",
+                        "reasoning",
+                        "recovery",
+                    ],
+                },
+                "description": "Categories to include in the assessment. Default: all.",
+            },
+            "timeout_per_task": {
+                "type": "integer",
+                "minimum": 30,
+                "maximum": 600,
+                "default": 120,
+                "description": "Timeout in seconds for each task.",
+            },
+            "max_steps_per_task": {
+                "type": "integer",
+                "minimum": 5,
+                "maximum": 50,
+                "default": 15,
+                "description": "Maximum interaction steps per task.",
+            },
+        },
+    }
+
+    # Category-specific config schema
+    category_config_schema = {
+        "type": "object",
+        "properties": {
+            "num_tasks": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20,
+                "default": 16,
+                "description": "Number of tasks to run for this category.",
+            },
+            "timeout_per_task": {
+                "type": "integer",
+                "minimum": 30,
+                "maximum": 600,
+                "default": 120,
+                "description": "Timeout in seconds for each task.",
+            },
+            "max_steps_per_task": {
+                "type": "integer",
+                "minimum": 5,
+                "maximum": 50,
+                "default": 15,
+                "description": "Maximum interaction steps per task.",
+            },
+        },
+    }
+
+    # Full assessment input schema
+    full_assessment_schema = {
+        "type": "object",
+        "properties": {
+            "participants": participants_schema,
+            "config": full_config_schema,
+        },
+        "required": ["participants"],
+    }
+
+    # Category assessment input schema
+    category_assessment_schema = {
+        "type": "object",
+        "properties": {
+            "participants": participants_schema,
+            "config": category_config_schema,
+        },
+        "required": ["participants"],
+    }
+
     return AgentCard(
         name="WebShop+ Benchmark",
         description="Evaluates shopping agents on budget management, preference memory, "
@@ -433,6 +537,7 @@ def create_webshop_plus_agent_card(base_url: str) -> AgentCard:
                 ],
                 inputModes=["application/json"],
                 outputModes=["application/json"],
+                inputSchema=full_assessment_schema,
             ),
             AgentSkill(
                 id="budget-assessment",
@@ -442,6 +547,7 @@ def create_webshop_plus_agent_card(base_url: str) -> AgentCard:
                 examples=["Test budget constraint handling"],
                 inputModes=["application/json"],
                 outputModes=["application/json"],
+                inputSchema=category_assessment_schema,
             ),
             AgentSkill(
                 id="memory-assessment",
@@ -451,6 +557,7 @@ def create_webshop_plus_agent_card(base_url: str) -> AgentCard:
                 examples=["Test preference memory"],
                 inputModes=["application/json"],
                 outputModes=["application/json"],
+                inputSchema=category_assessment_schema,
             ),
             AgentSkill(
                 id="constraint-assessment",
@@ -460,6 +567,7 @@ def create_webshop_plus_agent_card(base_url: str) -> AgentCard:
                 examples=["Test negative constraint handling"],
                 inputModes=["application/json"],
                 outputModes=["application/json"],
+                inputSchema=category_assessment_schema,
             ),
             AgentSkill(
                 id="reasoning-assessment",
@@ -469,6 +577,7 @@ def create_webshop_plus_agent_card(base_url: str) -> AgentCard:
                 examples=["Test comparative reasoning"],
                 inputModes=["application/json"],
                 outputModes=["application/json"],
+                inputSchema=category_assessment_schema,
             ),
             AgentSkill(
                 id="recovery-assessment",
@@ -478,6 +587,7 @@ def create_webshop_plus_agent_card(base_url: str) -> AgentCard:
                 examples=["Test error recovery"],
                 inputModes=["application/json"],
                 outputModes=["application/json"],
+                inputSchema=category_assessment_schema,
             ),
         ],
     )
