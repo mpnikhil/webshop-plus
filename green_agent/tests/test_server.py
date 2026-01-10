@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
-from src.server import app, state
+from src.server_legacy import app, state
 from src.messenger import (
     A2AClient,
     A2AMessage,

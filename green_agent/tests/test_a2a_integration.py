@@ -1,5 +1,5 @@
 """
-Integration tests for the SDK-based A2A server (server_a2a.py).
+Integration tests for the SDK-based A2A server.
 
 These tests verify that the SDK-based server correctly handles A2A protocol
 requests and integrates with the WebShopPlusExecutor.
@@ -20,7 +20,7 @@ import httpx
 import pytest
 from starlette.testclient import TestClient
 
-from src.server_a2a import create_app, create_sdk_agent_card
+from src.server import create_app, create_sdk_agent_card
 
 
 # =============================================================================
@@ -204,7 +204,7 @@ class TestAgentCardFactory:
         for skill in agent_card.skills:
             # SDK uses snake_case internally (input_modes) but serializes to camelCase (inputModes)
             assert skill.input_modes is not None, f"Skill {skill.id} has no input_modes"
-            # Note: inputSchema is defined in server_a2a.py but not serialized
+            # Note: inputSchema is defined in server.py but not serialized
             # due to a2a-sdk v0.3.x limitation (AgentSkill model ignores extra fields)
 
     def test_assessment_skill_has_correct_input_mode(self, agent_card):
@@ -307,7 +307,7 @@ class TestEndToEnd:
     async def test_full_assessment_flow_mocked(self):
         """Test complete assessment flow with mocked agent."""
         # Create app with mocked executor
-        with patch("src.server_a2a.WebShopPlusExecutor") as MockExecutor:
+        with patch("src.server.WebShopPlusExecutor") as MockExecutor:
             # Setup mock executor
             mock_executor = MagicMock()
 
