@@ -45,6 +45,7 @@ from src.messenger import (
     extract_action_from_text,
     get_text_from_message,
 )
+from src.agent import AgentConfig, WebShopPlusAgent
 from src.models import (
     AssessmentConfig,
     AssessmentRequest,
@@ -570,8 +571,7 @@ async def stream_assessment(
 ) -> AsyncGenerator[dict[str, Any], None]:
     """Stream assessment progress via SSE.
 
-    This is a placeholder that will be connected to the actual assessment
-    orchestration in Phase 9.
+    Uses the WebShopPlusAgent to orchestrate the actual assessment.
 
     Args:
         params: Request parameters.
@@ -600,9 +600,6 @@ async def stream_assessment(
         request_id,
     )
 
-    # Placeholder: In Phase 9, this will be replaced with actual orchestration
-    # For now, simulate a simple assessment flow
-
     if not participants:
         # No participants - send error and complete
         yield create_status_update_event(
@@ -617,75 +614,67 @@ async def stream_assessment(
             state.active_assessments[task_id]["status"] = "failed"
         return
 
-    # Simulate assessment progress
-    total_tasks = config_data.get("num_tasks", 80)
-    task_types = config_data.get("task_types", ["all"])
+    # Parse assessment config
+    config = AssessmentConfig(**config_data) if config_data else AssessmentConfig()
 
-    for i in range(min(5, total_tasks)):  # Placeholder: just 5 iterations
-        if state.active_assessments.get(task_id, {}).get("canceled"):
-            yield create_status_update_event(
-                task_id,
-                context_id,
-                TaskState.CANCELED,
-                "Assessment canceled",
-                True,
-                request_id,
-            )
-            return
+    # Create agent config
+    agent_config = AgentConfig(
+        task_timeout_seconds=config.timeout_per_task,
+    )
 
-        progress = (i + 1) / total_tasks
+    try:
+        # Create and run the orchestration agent
+        async with WebShopPlusAgent(config=agent_config) as agent:
+            # Check for cancellation
+            def check_canceled():
+                return state.active_assessments.get(task_id, {}).get("canceled", False)
+
+            # Stream results from the agent
+            async for event in agent.run_streaming(
+                participants=participants,
+                config=config,
+                task_id=task_id,
+                context_id=context_id,
+                request_id=request_id,
+            ):
+                # Check for cancellation
+                if check_canceled():
+                    agent.cancel()
+                    yield create_status_update_event(
+                        task_id,
+                        context_id,
+                        TaskState.CANCELED,
+                        "Assessment canceled by user",
+                        True,
+                        request_id,
+                    )
+                    if task_id in state.active_assessments:
+                        state.active_assessments[task_id]["status"] = "canceled"
+                    return
+
+                yield event
+
+                # Check if this is a final event
+                result = event.get("result", {})
+                if result.get("final"):
+                    event_state = result.get("status", {}).get("state")
+                    if event_state in ("completed", "failed", "canceled"):
+                        if task_id in state.active_assessments:
+                            state.active_assessments[task_id]["status"] = event_state
+                        return
+
+    except Exception as e:
+        logger.error("Assessment error", task_id=task_id, error=str(e))
         yield create_status_update_event(
             task_id,
             context_id,
-            TaskState.WORKING,
-            f"Processing task {i + 1}/{total_tasks}",
-            False,
+            TaskState.FAILED,
+            f"Assessment failed: {str(e)}",
+            True,
             request_id,
         )
-        await asyncio.sleep(0.5)  # Placeholder delay
-
-    # Create results artifact
-    results = AssessmentResults(
-        assessment_id=task_id,
-        participants=participants,
-        config=AssessmentConfig(**config_data) if config_data else AssessmentConfig(),
-        results=[],  # Placeholder - will be filled in Phase 9
-    )
-    results.calculate_aggregate()
-
-    artifact = Artifact(
-        name="assessment_results",
-        description="WebShop+ assessment results",
-        parts=[
-            {
-                "kind": "text",
-                "text": json.dumps(results.model_dump(mode="json"), indent=2, default=str),
-            }
-        ],
-        metadata={"format": "json"},
-    )
-
-    yield create_artifact_update_event(
-        task_id,
-        context_id,
-        artifact,
-        append=False,
-        last_chunk=True,
-        request_id=request_id,
-    )
-
-    # Final status
-    if task_id in state.active_assessments:
-        state.active_assessments[task_id]["status"] = "completed"
-
-    yield create_status_update_event(
-        task_id,
-        context_id,
-        TaskState.COMPLETED,
-        "Assessment completed",
-        True,
-        request_id,
-    )
+        if task_id in state.active_assessments:
+            state.active_assessments[task_id]["status"] = "failed"
 
 
 # =============================================================================

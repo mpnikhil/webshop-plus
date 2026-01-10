@@ -655,6 +655,7 @@ def parse_action_from_response(response: JSONRPCResponse) -> Optional[str]:
     """Extract an action string from an agent's response.
 
     The action should be in the format: search[query] or click[element]
+    Actions are expected in agent messages (history or direct message), not artifacts.
 
     Args:
         response: The JSON-RPC response from the purple agent.
@@ -672,7 +673,7 @@ def parse_action_from_response(response: JSONRPCResponse) -> Optional[str]:
     # Try to extract from task result
     result = response.result
 
-    # Check if it's a task response
+    # Check if it's a task response with history
     if "history" in result:
         history = result.get("history", [])
         if history:
@@ -693,16 +694,6 @@ def parse_action_from_response(response: JSONRPCResponse) -> Optional[str]:
             if part.get("kind") == "text":
                 text = part.get("text", "")
                 return extract_action_from_text(text)
-
-    # Check for artifacts (might contain the action)
-    if "artifacts" in result:
-        for artifact in result.get("artifacts", []):
-            for part in artifact.get("parts", []):
-                if part.get("kind") == "text":
-                    text = part.get("text", "")
-                    action = extract_action_from_text(text)
-                    if action:
-                        return action
 
     return None
 
