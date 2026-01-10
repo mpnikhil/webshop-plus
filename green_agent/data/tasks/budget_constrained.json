@@ -1,0 +1,732 @@
+[
+  {
+    "task_id": "budget_001",
+    "task_type": "budget_constrained",
+    "instruction": "I need a good quality wireless mouse and a mousepad for my home office. I have about $50 to spend and want to get the best value for my money.",
+    "difficulty": "easy",
+    "expected_actions": 12,
+    "timeout_seconds": 180,
+    "constraints": {
+      "budget": 50.00,
+      "required_items": [
+        {
+          "category": "electronics",
+          "attributes": {"type": "wireless mouse"},
+          "optional": false
+        },
+        {
+          "category": "office",
+          "attributes": {"type": "mousepad"},
+          "optional": false
+        }
+      ],
+      "optimization_goal": "maximize_quality"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.3,
+      "completion_weight": 0.4,
+      "quality_weight": 0.3
+    }
+  },
+  {
+    "task_id": "budget_002",
+    "task_type": "budget_constrained",
+    "instruction": "I'm looking for a new water bottle and a lunch bag for work. My budget is $40, and I'd prefer something durable that will last.",
+    "difficulty": "easy",
+    "expected_actions": 10,
+    "timeout_seconds": 180,
+    "constraints": {
+      "budget": 40.00,
+      "required_items": [
+        {
+          "category": "kitchen",
+          "attributes": {"type": "water bottle"},
+          "optional": false
+        },
+        {
+          "category": "bags",
+          "attributes": {"type": "lunch bag"},
+          "optional": false
+        }
+      ],
+      "optimization_goal": "maximize_quality"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.3,
+      "completion_weight": 0.4,
+      "quality_weight": 0.3
+    }
+  },
+  {
+    "task_id": "budget_003",
+    "task_type": "budget_constrained",
+    "instruction": "I need to buy a phone case and screen protector for my iPhone. I've got $35 to spend and just want decent protection without breaking the bank.",
+    "difficulty": "easy",
+    "expected_actions": 10,
+    "timeout_seconds": 180,
+    "constraints": {
+      "budget": 35.00,
+      "required_items": [
+        {
+          "category": "electronics",
+          "attributes": {"type": "phone case", "compatibility": "iPhone"},
+          "optional": false
+        },
+        {
+          "category": "electronics",
+          "attributes": {"type": "screen protector", "compatibility": "iPhone"},
+          "optional": false
+        }
+      ],
+      "optimization_goal": "minimize_cost"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.4,
+      "completion_weight": 0.4,
+      "quality_weight": 0.2
+    }
+  },
+  {
+    "task_id": "budget_004",
+    "task_type": "budget_constrained",
+    "instruction": "Can you help me find a yoga mat and a set of resistance bands? I want to start working out at home and have around $60 to spend.",
+    "difficulty": "easy",
+    "expected_actions": 12,
+    "timeout_seconds": 180,
+    "constraints": {
+      "budget": 60.00,
+      "required_items": [
+        {
+          "category": "sports",
+          "attributes": {"type": "yoga mat"},
+          "optional": false
+        },
+        {
+          "category": "sports",
+          "attributes": {"type": "resistance bands"},
+          "optional": false
+        }
+      ],
+      "optimization_goal": "balance"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.3,
+      "completion_weight": 0.4,
+      "quality_weight": 0.3
+    }
+  },
+  {
+    "task_id": "budget_005",
+    "task_type": "budget_constrained",
+    "instruction": "I need a new pillow and a set of bed sheets. I have a $75 budget and comfort is my priority.",
+    "difficulty": "easy",
+    "expected_actions": 12,
+    "timeout_seconds": 180,
+    "constraints": {
+      "budget": 75.00,
+      "required_items": [
+        {
+          "category": "home",
+          "attributes": {"type": "pillow"},
+          "optional": false
+        },
+        {
+          "category": "home",
+          "attributes": {"type": "bed sheets"},
+          "optional": false
+        }
+      ],
+      "optimization_goal": "maximize_quality"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.25,
+      "completion_weight": 0.35,
+      "quality_weight": 0.4
+    }
+  },
+  {
+    "task_id": "budget_006",
+    "task_type": "budget_constrained",
+    "instruction": "I'm setting up a small home bar and need a cocktail shaker, a set of bar tools, and some whiskey glasses. I have $80 to work with.",
+    "difficulty": "medium",
+    "expected_actions": 18,
+    "timeout_seconds": 240,
+    "constraints": {
+      "budget": 80.00,
+      "required_items": [
+        {
+          "category": "kitchen",
+          "attributes": {"type": "cocktail shaker"},
+          "optional": false
+        },
+        {
+          "category": "kitchen",
+          "attributes": {"type": "bar tool set"},
+          "optional": false
+        },
+        {
+          "category": "kitchen",
+          "attributes": {"type": "whiskey glasses"},
+          "optional": false
+        }
+      ],
+      "optimization_goal": "maximize_quality"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.3,
+      "completion_weight": 0.4,
+      "quality_weight": 0.3
+    }
+  },
+  {
+    "task_id": "budget_007",
+    "task_type": "budget_constrained",
+    "instruction": "I'm preparing for a hiking trip and need a daypack, a headlamp, and hiking socks. My total budget is $100, so I need to be strategic about what I get.",
+    "difficulty": "medium",
+    "expected_actions": 18,
+    "timeout_seconds": 240,
+    "constraints": {
+      "budget": 100.00,
+      "required_items": [
+        {
+          "category": "sports",
+          "attributes": {"type": "daypack", "activity": "hiking"},
+          "optional": false
+        },
+        {
+          "category": "sports",
+          "attributes": {"type": "headlamp"},
+          "optional": false
+        },
+        {
+          "category": "clothing",
+          "attributes": {"type": "hiking socks"},
+          "optional": false
+        }
+      ],
+      "optimization_goal": "balance"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.35,
+      "completion_weight": 0.35,
+      "quality_weight": 0.3
+    }
+  },
+  {
+    "task_id": "budget_008",
+    "task_type": "budget_constrained",
+    "instruction": "My daughter is starting school and needs a backpack, a lunchbox, and a pencil case. I'd like to keep everything under $70 if possible.",
+    "difficulty": "medium",
+    "expected_actions": 16,
+    "timeout_seconds": 240,
+    "constraints": {
+      "budget": 70.00,
+      "required_items": [
+        {
+          "category": "bags",
+          "attributes": {"type": "backpack", "style": "kids"},
+          "optional": false
+        },
+        {
+          "category": "kitchen",
+          "attributes": {"type": "lunchbox", "style": "kids"},
+          "optional": false
+        },
+        {
+          "category": "office",
+          "attributes": {"type": "pencil case"},
+          "optional": false
+        }
+      ],
+      "optimization_goal": "minimize_cost"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.4,
+      "completion_weight": 0.4,
+      "quality_weight": 0.2
+    }
+  },
+  {
+    "task_id": "budget_009",
+    "task_type": "budget_constrained",
+    "instruction": "I want to upgrade my coffee setup at home. I need a French press, a coffee grinder, and some coffee beans. I have a $90 budget.",
+    "difficulty": "medium",
+    "expected_actions": 18,
+    "timeout_seconds": 240,
+    "constraints": {
+      "budget": 90.00,
+      "required_items": [
+        {
+          "category": "kitchen",
+          "attributes": {"type": "French press"},
+          "optional": false
+        },
+        {
+          "category": "kitchen",
+          "attributes": {"type": "coffee grinder"},
+          "optional": false
+        },
+        {
+          "category": "grocery",
+          "attributes": {"type": "coffee beans"},
+          "optional": false
+        }
+      ],
+      "optimization_goal": "maximize_quality"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.3,
+      "completion_weight": 0.35,
+      "quality_weight": 0.35
+    }
+  },
+  {
+    "task_id": "budget_010",
+    "task_type": "budget_constrained",
+    "instruction": "I'm redecorating my living room on a budget. I need throw pillows, a small rug, and a table lamp. I can spend up to $120.",
+    "difficulty": "medium",
+    "expected_actions": 20,
+    "timeout_seconds": 240,
+    "constraints": {
+      "budget": 120.00,
+      "required_items": [
+        {
+          "category": "home",
+          "attributes": {"type": "throw pillows"},
+          "optional": false
+        },
+        {
+          "category": "home",
+          "attributes": {"type": "area rug", "size": "small"},
+          "optional": false
+        },
+        {
+          "category": "home",
+          "attributes": {"type": "table lamp"},
+          "optional": false
+        }
+      ],
+      "optimization_goal": "balance"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.3,
+      "completion_weight": 0.4,
+      "quality_weight": 0.3
+    }
+  },
+  {
+    "task_id": "budget_011",
+    "task_type": "budget_constrained",
+    "instruction": "I need supplies for my new puppy: a dog bed, food bowls, and a leash with collar. I'm trying to stay under $85.",
+    "difficulty": "medium",
+    "expected_actions": 18,
+    "timeout_seconds": 240,
+    "constraints": {
+      "budget": 85.00,
+      "required_items": [
+        {
+          "category": "pets",
+          "attributes": {"type": "dog bed"},
+          "optional": false
+        },
+        {
+          "category": "pets",
+          "attributes": {"type": "food bowls", "animal": "dog"},
+          "optional": false
+        },
+        {
+          "category": "pets",
+          "attributes": {"type": "leash"},
+          "optional": false
+        },
+        {
+          "category": "pets",
+          "attributes": {"type": "collar", "animal": "dog"},
+          "optional": false
+        }
+      ],
+      "optimization_goal": "balance"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.35,
+      "completion_weight": 0.4,
+      "quality_weight": 0.25
+    }
+  },
+  {
+    "task_id": "budget_012",
+    "task_type": "budget_constrained",
+    "instruction": "I'm going on a beach vacation and need sunscreen, sunglasses, and a beach towel. I also want a good book to read. Budget is $75.",
+    "difficulty": "medium",
+    "expected_actions": 20,
+    "timeout_seconds": 240,
+    "constraints": {
+      "budget": 75.00,
+      "required_items": [
+        {
+          "category": "beauty",
+          "attributes": {"type": "sunscreen"},
+          "optional": false
+        },
+        {
+          "category": "accessories",
+          "attributes": {"type": "sunglasses"},
+          "optional": false
+        },
+        {
+          "category": "home",
+          "attributes": {"type": "beach towel"},
+          "optional": false
+        },
+        {
+          "category": "books",
+          "attributes": {"type": "book"},
+          "optional": true
+        }
+      ],
+      "optimization_goal": "maximize_quality"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.3,
+      "completion_weight": 0.4,
+      "quality_weight": 0.3
+    }
+  },
+  {
+    "task_id": "budget_013",
+    "task_type": "budget_constrained",
+    "instruction": "I need a desk organizer, a desk lamp, and a comfortable mouse pad with wrist rest for my home office. Would also love a small plant if it fits in my $65 budget.",
+    "difficulty": "medium",
+    "expected_actions": 20,
+    "timeout_seconds": 240,
+    "constraints": {
+      "budget": 65.00,
+      "required_items": [
+        {
+          "category": "office",
+          "attributes": {"type": "desk organizer"},
+          "optional": false
+        },
+        {
+          "category": "office",
+          "attributes": {"type": "desk lamp"},
+          "optional": false
+        },
+        {
+          "category": "office",
+          "attributes": {"type": "mouse pad", "feature": "wrist rest"},
+          "optional": false
+        },
+        {
+          "category": "home",
+          "attributes": {"type": "desk plant"},
+          "optional": true
+        }
+      ],
+      "optimization_goal": "minimize_cost"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.4,
+      "completion_weight": 0.4,
+      "quality_weight": 0.2
+    }
+  },
+  {
+    "task_id": "budget_014",
+    "task_type": "budget_constrained",
+    "instruction": "I want to start journaling and need a nice notebook, some quality pens, and maybe a pencil case. I have $45 to spend.",
+    "difficulty": "medium",
+    "expected_actions": 16,
+    "timeout_seconds": 240,
+    "constraints": {
+      "budget": 45.00,
+      "required_items": [
+        {
+          "category": "office",
+          "attributes": {"type": "notebook", "style": "journal"},
+          "optional": false
+        },
+        {
+          "category": "office",
+          "attributes": {"type": "pens", "quality": "premium"},
+          "optional": false
+        },
+        {
+          "category": "office",
+          "attributes": {"type": "pencil case"},
+          "optional": true
+        }
+      ],
+      "optimization_goal": "maximize_quality"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.3,
+      "completion_weight": 0.35,
+      "quality_weight": 0.35
+    }
+  },
+  {
+    "task_id": "budget_015",
+    "task_type": "budget_constrained",
+    "instruction": "I'm setting up a meditation corner and need a meditation cushion, some incense, and an essential oil diffuser. My budget is $80.",
+    "difficulty": "medium",
+    "expected_actions": 18,
+    "timeout_seconds": 240,
+    "constraints": {
+      "budget": 80.00,
+      "required_items": [
+        {
+          "category": "home",
+          "attributes": {"type": "meditation cushion"},
+          "optional": false
+        },
+        {
+          "category": "home",
+          "attributes": {"type": "incense"},
+          "optional": false
+        },
+        {
+          "category": "home",
+          "attributes": {"type": "essential oil diffuser"},
+          "optional": false
+        }
+      ],
+      "optimization_goal": "balance"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.3,
+      "completion_weight": 0.4,
+      "quality_weight": 0.3
+    }
+  },
+  {
+    "task_id": "budget_016",
+    "task_type": "budget_constrained",
+    "instruction": "I'm hosting a game night and need a deck of cards, a board game, snack bowls, and coasters. I'd also like some candles for ambiance. Total budget is $60.",
+    "difficulty": "hard",
+    "expected_actions": 25,
+    "timeout_seconds": 300,
+    "constraints": {
+      "budget": 60.00,
+      "required_items": [
+        {
+          "category": "toys",
+          "attributes": {"type": "playing cards"},
+          "optional": false
+        },
+        {
+          "category": "toys",
+          "attributes": {"type": "board game"},
+          "optional": false
+        },
+        {
+          "category": "kitchen",
+          "attributes": {"type": "snack bowls"},
+          "optional": false
+        },
+        {
+          "category": "home",
+          "attributes": {"type": "coasters"},
+          "optional": false
+        },
+        {
+          "category": "home",
+          "attributes": {"type": "candles"},
+          "optional": false
+        }
+      ],
+      "optimization_goal": "minimize_cost"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.4,
+      "completion_weight": 0.4,
+      "quality_weight": 0.2
+    }
+  },
+  {
+    "task_id": "budget_017",
+    "task_type": "budget_constrained",
+    "instruction": "I'm putting together an emergency kit and need a first aid kit, flashlight, batteries, emergency blanket, and water purification tablets. Budget is only $75.",
+    "difficulty": "hard",
+    "expected_actions": 28,
+    "timeout_seconds": 300,
+    "constraints": {
+      "budget": 75.00,
+      "required_items": [
+        {
+          "category": "health",
+          "attributes": {"type": "first aid kit"},
+          "optional": false
+        },
+        {
+          "category": "electronics",
+          "attributes": {"type": "flashlight"},
+          "optional": false
+        },
+        {
+          "category": "electronics",
+          "attributes": {"type": "batteries"},
+          "optional": false
+        },
+        {
+          "category": "outdoor",
+          "attributes": {"type": "emergency blanket"},
+          "optional": false
+        },
+        {
+          "category": "outdoor",
+          "attributes": {"type": "water purification tablets"},
+          "optional": false
+        }
+      ],
+      "optimization_goal": "balance"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.35,
+      "completion_weight": 0.4,
+      "quality_weight": 0.25
+    }
+  },
+  {
+    "task_id": "budget_018",
+    "task_type": "budget_constrained",
+    "instruction": "I'm creating a home spa experience and need bath bombs, face masks, a loofah, bath salts, and a candle. If there's room in my $55 budget, I'd love some body lotion too.",
+    "difficulty": "hard",
+    "expected_actions": 30,
+    "timeout_seconds": 300,
+    "constraints": {
+      "budget": 55.00,
+      "required_items": [
+        {
+          "category": "beauty",
+          "attributes": {"type": "bath bombs"},
+          "optional": false
+        },
+        {
+          "category": "beauty",
+          "attributes": {"type": "face masks"},
+          "optional": false
+        },
+        {
+          "category": "beauty",
+          "attributes": {"type": "loofah"},
+          "optional": false
+        },
+        {
+          "category": "beauty",
+          "attributes": {"type": "bath salts"},
+          "optional": false
+        },
+        {
+          "category": "home",
+          "attributes": {"type": "candle"},
+          "optional": false
+        },
+        {
+          "category": "beauty",
+          "attributes": {"type": "body lotion"},
+          "optional": true
+        }
+      ],
+      "optimization_goal": "maximize_quality"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.35,
+      "completion_weight": 0.4,
+      "quality_weight": 0.25
+    }
+  },
+  {
+    "task_id": "budget_019",
+    "task_type": "budget_constrained",
+    "instruction": "I'm going camping next weekend and need a sleeping bag, camp stove, mess kit, water bottle, and a camping lantern. I only have $100 total.",
+    "difficulty": "hard",
+    "expected_actions": 30,
+    "timeout_seconds": 300,
+    "constraints": {
+      "budget": 100.00,
+      "required_items": [
+        {
+          "category": "outdoor",
+          "attributes": {"type": "sleeping bag"},
+          "optional": false
+        },
+        {
+          "category": "outdoor",
+          "attributes": {"type": "camp stove"},
+          "optional": false
+        },
+        {
+          "category": "outdoor",
+          "attributes": {"type": "mess kit"},
+          "optional": false
+        },
+        {
+          "category": "outdoor",
+          "attributes": {"type": "water bottle"},
+          "optional": false
+        },
+        {
+          "category": "outdoor",
+          "attributes": {"type": "camping lantern"},
+          "optional": false
+        }
+      ],
+      "optimization_goal": "minimize_cost"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.45,
+      "completion_weight": 0.35,
+      "quality_weight": 0.2
+    }
+  },
+  {
+    "task_id": "budget_020",
+    "task_type": "budget_constrained",
+    "instruction": "I'm setting up a complete art station for my kid. I need watercolors, colored pencils, a sketchbook, an art smock, paint brushes, and a storage caddy. Budget is $50.",
+    "difficulty": "hard",
+    "expected_actions": 32,
+    "timeout_seconds": 300,
+    "constraints": {
+      "budget": 50.00,
+      "required_items": [
+        {
+          "category": "art",
+          "attributes": {"type": "watercolors"},
+          "optional": false
+        },
+        {
+          "category": "art",
+          "attributes": {"type": "colored pencils"},
+          "optional": false
+        },
+        {
+          "category": "art",
+          "attributes": {"type": "sketchbook"},
+          "optional": false
+        },
+        {
+          "category": "clothing",
+          "attributes": {"type": "art smock", "style": "kids"},
+          "optional": false
+        },
+        {
+          "category": "art",
+          "attributes": {"type": "paint brushes"},
+          "optional": false
+        },
+        {
+          "category": "art",
+          "attributes": {"type": "storage caddy"},
+          "optional": true
+        }
+      ],
+      "optimization_goal": "minimize_cost"
+    },
+    "evaluation_criteria": {
+      "budget_weight": 0.45,
+      "completion_weight": 0.35,
+      "quality_weight": 0.2
+    }
+  }
+]

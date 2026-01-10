@@ -1,0 +1,432 @@
+[
+  {
+    "task_id": "recovery_001",
+    "task_type": "error_recovery",
+    "instruction": "Oh no, I accidentally added the wrong quantity. I only needed 1 of these headphones, not 3. Can you fix my cart?",
+    "difficulty": "easy",
+    "expected_actions": 6,
+    "timeout_seconds": 120,
+    "setup": {
+      "cart_contents": [
+        {
+          "product_id": "HP-001",
+          "product_name": "Sony WH-1000XM4 Wireless Headphones",
+          "attributes": {"color": "black"},
+          "quantity": 3,
+          "price": 278.00
+        }
+      ],
+      "error_description": "Wrong quantity - ordered 3 instead of 1"
+    },
+    "correct_state": {
+      "expected_cart": [
+        {
+          "product_id": "HP-001",
+          "product_name": "Sony WH-1000XM4 Wireless Headphones",
+          "attributes": {"color": "black"},
+          "quantity": 1,
+          "price": 278.00
+        }
+      ]
+    },
+    "evaluation_criteria": {
+      "error_identified": true,
+      "error_fixed": true,
+      "unnecessary_actions_penalty": 0.1
+    }
+  },
+  {
+    "task_id": "recovery_002",
+    "task_type": "error_recovery",
+    "instruction": "Wait, I added a duplicate item by mistake. There are two of the same water bottles in my cart and I only need one. Please remove the extra one.",
+    "difficulty": "easy",
+    "expected_actions": 5,
+    "timeout_seconds": 120,
+    "setup": {
+      "cart_contents": [
+        {
+          "product_id": "WB-042",
+          "product_name": "Hydro Flask 32oz Water Bottle",
+          "attributes": {"color": "pacific"},
+          "quantity": 1,
+          "price": 44.95
+        },
+        {
+          "product_id": "WB-042",
+          "product_name": "Hydro Flask 32oz Water Bottle",
+          "attributes": {"color": "pacific"},
+          "quantity": 1,
+          "price": 44.95
+        }
+      ],
+      "error_description": "Duplicate item added to cart"
+    },
+    "correct_state": {
+      "expected_cart": [
+        {
+          "product_id": "WB-042",
+          "product_name": "Hydro Flask 32oz Water Bottle",
+          "attributes": {"color": "pacific"},
+          "quantity": 1,
+          "price": 44.95
+        }
+      ]
+    },
+    "evaluation_criteria": {
+      "error_identified": true,
+      "error_fixed": true,
+      "unnecessary_actions_penalty": 0.1
+    }
+  },
+  {
+    "task_id": "recovery_003",
+    "task_type": "error_recovery",
+    "instruction": "I ordered the wrong color! I wanted a navy blue backpack, not black. Can you swap it for the navy one?",
+    "difficulty": "easy",
+    "expected_actions": 8,
+    "timeout_seconds": 120,
+    "setup": {
+      "cart_contents": [
+        {
+          "product_id": "BP-033-BLK",
+          "product_name": "JanSport Right Pack Backpack",
+          "attributes": {"color": "black"},
+          "quantity": 1,
+          "price": 65.00
+        }
+      ],
+      "error_description": "Wrong color selected - wanted navy blue, got black"
+    },
+    "correct_state": {
+      "expected_cart": [
+        {
+          "product_id": "BP-033-NVY",
+          "product_name": "JanSport Right Pack Backpack",
+          "attributes": {"color": "navy blue"},
+          "quantity": 1,
+          "price": 65.00
+        }
+      ]
+    },
+    "evaluation_criteria": {
+      "error_identified": true,
+      "error_fixed": true,
+      "unnecessary_actions_penalty": 0.1
+    }
+  },
+  {
+    "task_id": "recovery_004",
+    "task_type": "error_recovery",
+    "instruction": "The shoes in my cart are the wrong size. I need size 9, but I accidentally added size 11. Can you fix that?",
+    "difficulty": "easy",
+    "expected_actions": 8,
+    "timeout_seconds": 120,
+    "setup": {
+      "cart_contents": [
+        {
+          "product_id": "SH-055-11",
+          "product_name": "Adidas Ultraboost 22 Running Shoes",
+          "attributes": {"size": "11", "color": "cloud white"},
+          "quantity": 1,
+          "price": 190.00
+        }
+      ],
+      "error_description": "Wrong size selected - wanted 9, got 11"
+    },
+    "correct_state": {
+      "expected_cart": [
+        {
+          "product_id": "SH-055-9",
+          "product_name": "Adidas Ultraboost 22 Running Shoes",
+          "attributes": {"size": "9", "color": "cloud white"},
+          "quantity": 1,
+          "price": 190.00
+        }
+      ]
+    },
+    "evaluation_criteria": {
+      "error_identified": true,
+      "error_fixed": true,
+      "unnecessary_actions_penalty": 0.1
+    }
+  },
+  {
+    "task_id": "recovery_005",
+    "task_type": "error_recovery",
+    "instruction": "I added a shirt in medium but I need large instead. Also I wanted 2 of them, not just 1. Can you update my cart?",
+    "difficulty": "medium",
+    "expected_actions": 10,
+    "timeout_seconds": 180,
+    "setup": {
+      "cart_contents": [
+        {
+          "product_id": "TS-088-M",
+          "product_name": "Carhartt Workwear Pocket T-Shirt",
+          "attributes": {"size": "M", "color": "heather gray"},
+          "quantity": 1,
+          "price": 19.99
+        }
+      ],
+      "error_description": "Wrong size and wrong quantity - wanted large size and quantity 2"
+    },
+    "correct_state": {
+      "expected_cart": [
+        {
+          "product_id": "TS-088-L",
+          "product_name": "Carhartt Workwear Pocket T-Shirt",
+          "attributes": {"size": "L", "color": "heather gray"},
+          "quantity": 2,
+          "price": 19.99
+        }
+      ]
+    },
+    "evaluation_criteria": {
+      "error_identified": true,
+      "error_fixed": true,
+      "unnecessary_actions_penalty": 0.15
+    }
+  },
+  {
+    "task_id": "recovery_006",
+    "task_type": "error_recovery",
+    "instruction": "Something's wrong with my order. I wanted the 15-inch laptop sleeve, not 13-inch. And I accidentally added it twice. I only need one in the right size.",
+    "difficulty": "medium",
+    "expected_actions": 10,
+    "timeout_seconds": 180,
+    "setup": {
+      "cart_contents": [
+        {
+          "product_id": "LS-012-13",
+          "product_name": "Tomtoc 360 Protective Laptop Sleeve",
+          "attributes": {"size": "13-inch", "color": "gray"},
+          "quantity": 1,
+          "price": 25.99
+        },
+        {
+          "product_id": "LS-012-13",
+          "product_name": "Tomtoc 360 Protective Laptop Sleeve",
+          "attributes": {"size": "13-inch", "color": "gray"},
+          "quantity": 1,
+          "price": 25.99
+        }
+      ],
+      "error_description": "Wrong size and duplicate entry - need one 15-inch sleeve, not two 13-inch"
+    },
+    "correct_state": {
+      "expected_cart": [
+        {
+          "product_id": "LS-012-15",
+          "product_name": "Tomtoc 360 Protective Laptop Sleeve",
+          "attributes": {"size": "15-inch", "color": "gray"},
+          "quantity": 1,
+          "price": 27.99
+        }
+      ]
+    },
+    "evaluation_criteria": {
+      "error_identified": true,
+      "error_fixed": true,
+      "unnecessary_actions_penalty": 0.15
+    }
+  },
+  {
+    "task_id": "recovery_007",
+    "task_type": "error_recovery",
+    "instruction": "I made a mistake - I added dog food but I have a cat! Please remove the dog food and add cat food in the same flavor and brand if possible.",
+    "difficulty": "medium",
+    "expected_actions": 12,
+    "timeout_seconds": 180,
+    "setup": {
+      "cart_contents": [
+        {
+          "product_id": "PF-D-045",
+          "product_name": "Blue Buffalo Life Protection Dog Food - Chicken",
+          "attributes": {"size": "15 lb", "flavor": "chicken", "pet": "dog"},
+          "quantity": 1,
+          "price": 52.98
+        }
+      ],
+      "error_description": "Wrong pet type - added dog food instead of cat food"
+    },
+    "correct_state": {
+      "expected_cart": [
+        {
+          "product_id": "PF-C-045",
+          "product_name": "Blue Buffalo Indoor Health Cat Food - Chicken",
+          "attributes": {"size": "15 lb", "flavor": "chicken", "pet": "cat"},
+          "quantity": 1,
+          "price": 47.98
+        }
+      ]
+    },
+    "evaluation_criteria": {
+      "error_identified": true,
+      "error_fixed": true,
+      "unnecessary_actions_penalty": 0.15
+    }
+  },
+  {
+    "task_id": "recovery_008",
+    "task_type": "error_recovery",
+    "instruction": "This is all wrong. I wanted the king size sheets, not queen. I also wanted them in white, not beige. And I need the fitted sheet too, not just the flat sheet set.",
+    "difficulty": "medium",
+    "expected_actions": 14,
+    "timeout_seconds": 180,
+    "setup": {
+      "cart_contents": [
+        {
+          "product_id": "BD-022-Q-B",
+          "product_name": "Egyptian Cotton Flat Sheet Set",
+          "attributes": {"size": "queen", "color": "beige", "type": "flat sheet set"},
+          "quantity": 1,
+          "price": 79.99
+        }
+      ],
+      "error_description": "Wrong size, wrong color, and wrong product type"
+    },
+    "correct_state": {
+      "expected_cart": [
+        {
+          "product_id": "BD-025-K-W",
+          "product_name": "Egyptian Cotton Sheet Set with Fitted Sheet",
+          "attributes": {"size": "king", "color": "white", "type": "complete sheet set"},
+          "quantity": 1,
+          "price": 119.99
+        }
+      ]
+    },
+    "evaluation_criteria": {
+      "error_identified": true,
+      "error_fixed": true,
+      "unnecessary_actions_penalty": 0.15
+    }
+  },
+  {
+    "task_id": "recovery_009",
+    "task_type": "error_recovery",
+    "instruction": "My cart is a mess. I have three items and there are problems with all of them: the phone case is for an iPhone 13 but I have an iPhone 15, the screen protector quantity should be 2 not 1, and I don't even want the pop socket - please remove it. Can you fix everything?",
+    "difficulty": "hard",
+    "expected_actions": 18,
+    "timeout_seconds": 240,
+    "setup": {
+      "cart_contents": [
+        {
+          "product_id": "PC-IP13-CLR",
+          "product_name": "Spigen Ultra Hybrid Case - iPhone 13",
+          "attributes": {"compatibility": "iPhone 13", "color": "clear"},
+          "quantity": 1,
+          "price": 15.99
+        },
+        {
+          "product_id": "SP-IP15-2PK",
+          "product_name": "Tempered Glass Screen Protector - iPhone 15",
+          "attributes": {"compatibility": "iPhone 15", "pack_size": "2"},
+          "quantity": 1,
+          "price": 12.99
+        },
+        {
+          "product_id": "PS-001",
+          "product_name": "PopSockets Grip",
+          "attributes": {"design": "marble"},
+          "quantity": 1,
+          "price": 9.99
+        }
+      ],
+      "error_description": "Multiple errors: wrong phone case model, wrong screen protector quantity, unwanted item in cart"
+    },
+    "correct_state": {
+      "expected_cart": [
+        {
+          "product_id": "PC-IP15-CLR",
+          "product_name": "Spigen Ultra Hybrid Case - iPhone 15",
+          "attributes": {"compatibility": "iPhone 15", "color": "clear"},
+          "quantity": 1,
+          "price": 17.99
+        },
+        {
+          "product_id": "SP-IP15-2PK",
+          "product_name": "Tempered Glass Screen Protector - iPhone 15",
+          "attributes": {"compatibility": "iPhone 15", "pack_size": "2"},
+          "quantity": 2,
+          "price": 12.99
+        }
+      ]
+    },
+    "evaluation_criteria": {
+      "error_identified": true,
+      "error_fixed": true,
+      "unnecessary_actions_penalty": 0.2
+    }
+  },
+  {
+    "task_id": "recovery_010",
+    "task_type": "error_recovery",
+    "instruction": "I was shopping for a camping trip and made several mistakes. The sleeping bag is rated for 40 degrees but I need a 20-degree bag for cold weather. The tent is a 2-person but we have 4 people so I need a 4-person tent. The camp stove quantity is 2 but I only need 1. And I added a hammock by accident that I don't want. This is a disaster - please fix my entire cart!",
+    "difficulty": "hard",
+    "expected_actions": 25,
+    "timeout_seconds": 300,
+    "setup": {
+      "cart_contents": [
+        {
+          "product_id": "SB-040-REG",
+          "product_name": "REI Co-op Trailbreak Sleeping Bag 40",
+          "attributes": {"temp_rating": "40F", "size": "regular"},
+          "quantity": 1,
+          "price": 89.95
+        },
+        {
+          "product_id": "TN-2P-GRN",
+          "product_name": "Coleman Sundome 2-Person Tent",
+          "attributes": {"capacity": "2-person", "color": "green"},
+          "quantity": 1,
+          "price": 69.99
+        },
+        {
+          "product_id": "CS-001",
+          "product_name": "Coleman Classic Propane Stove",
+          "attributes": {"fuel_type": "propane"},
+          "quantity": 2,
+          "price": 54.99
+        },
+        {
+          "product_id": "HM-001",
+          "product_name": "ENO DoubleNest Hammock",
+          "attributes": {"color": "royal/charcoal"},
+          "quantity": 1,
+          "price": 69.95
+        }
+      ],
+      "error_description": "Multiple errors across all items: wrong sleeping bag temp rating, wrong tent capacity, wrong stove quantity, unwanted hammock"
+    },
+    "correct_state": {
+      "expected_cart": [
+        {
+          "product_id": "SB-020-REG",
+          "product_name": "REI Co-op Trailbreak Sleeping Bag 20",
+          "attributes": {"temp_rating": "20F", "size": "regular"},
+          "quantity": 1,
+          "price": 119.95
+        },
+        {
+          "product_id": "TN-4P-GRN",
+          "product_name": "Coleman Sundome 4-Person Tent",
+          "attributes": {"capacity": "4-person", "color": "green"},
+          "quantity": 1,
+          "price": 99.99
+        },
+        {
+          "product_id": "CS-001",
+          "product_name": "Coleman Classic Propane Stove",
+          "attributes": {"fuel_type": "propane"},
+          "quantity": 1,
+          "price": 54.99
+        }
+      ]
+    },
+    "evaluation_criteria": {
+      "error_identified": true,
+      "error_fixed": true,
+      "unnecessary_actions_penalty": 0.2
+    }
+  }
+]
