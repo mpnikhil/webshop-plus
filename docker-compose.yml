@@ -1,0 +1,102 @@
+# WebShop+ Docker Compose Configuration
+#
+# Usage:
+#   docker compose up -d                    # Start both agents
+#   docker compose up green                 # Start green agent only
+#   docker compose logs -f                  # Follow logs
+#   docker compose down                     # Stop all services
+#
+# For local development with Ollama:
+#   docker compose --profile local up -d    # Includes Ollama service
+#
+# Environment variables:
+#   - Copy sample.env to .env and configure LLM settings
+#   - Or set LLM_MODEL and LLM_API_KEY directly
+
+services:
+  # Green Agent (Evaluator)
+  green:
+    build:
+      context: ./green_agent
+      dockerfile: Dockerfile
+    image: ghcr.io/mpnikhil/webshop-plus-green:latest
+    container_name: webshop-plus-green
+    ports:
+      - "8000:8000"
+    environment:
+      - LLM_MODEL=${LLM_MODEL:-nebius/Qwen/Qwen3-32B}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - WEBSHOP_MODE=${WEBSHOP_MODE:-preview}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PURPLE_AGENT_URL=http://purple:8001/a2a
+    volumes:
+      - ./webshop/data:/app/webshop/data:ro
+    depends_on:
+      purple:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - webshop-network
+
+  # Purple Agent (Shopper)
+  purple:
+    build:
+      context: ./purple_agent
+      dockerfile: Dockerfile
+    image: ghcr.io/mpnikhil/webshop-plus-purple:latest
+    container_name: webshop-plus-purple
+    ports:
+      - "8001:8001"
+    environment:
+      - LLM_MODEL=${LLM_MODEL:-nebius/Qwen/Qwen3-32B}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - webshop-network
+
+  # Ollama (optional - for local development)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: webshop-plus-ollama
+    profiles:
+      - local
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - webshop-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+networks:
+  webshop-network:
+    driver: bridge
+
+volumes:
+  ollama-data:
