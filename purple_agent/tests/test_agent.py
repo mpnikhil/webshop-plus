@@ -674,8 +674,9 @@ SEARCH_QUERY: shoes"""
 class TestLLMClient:
     """Test LLM client (with mocked LiteLLM)."""
 
+    @patch.dict("os.environ", {}, clear=True)
     def test_llm_client_initialization(self):
-        """Test LLMClient initialization."""
+        """Test LLMClient initialization with default values."""
         from src.llm_client import LLMClient
 
         client = LLMClient()
