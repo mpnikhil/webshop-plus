@@ -2,146 +2,83 @@
 Tests for WebShop+ Purple Agent.
 
 This module contains comprehensive tests for:
-- Messenger utilities (A2A protocol)
+- Messenger utilities (SDK-based A2A protocol)
 - ShopperAgent (shopping logic)
-- Server endpoints (A2A server)
+- LLM Client
 """
 
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
-from fastapi.testclient import TestClient
+from unittest.mock import MagicMock, patch
+
 
 # =============================================================================
-# Messenger Tests
+# Messenger Tests (SDK-based utilities)
 # =============================================================================
 
 
-class TestMessengerModels:
-    """Test A2A protocol models."""
+class TestMessengerUtilities:
+    """Test SDK-based messenger utilities."""
 
-    def test_task_state_enum(self):
-        """Test TaskState enum values."""
-        from src.messenger import TaskState
+    def test_create_message(self):
+        """Test create_message function creates valid Message."""
+        from a2a.types import Role
+        from src.messenger import create_message
 
-        assert TaskState.SUBMITTED == "submitted"
-        assert TaskState.WORKING == "working"
-        assert TaskState.COMPLETED == "completed"
-        assert TaskState.FAILED == "failed"
-
-    def test_message_role_enum(self):
-        """Test MessageRole enum values."""
-        from src.messenger import MessageRole
-
-        assert MessageRole.USER == "user"
-        assert MessageRole.AGENT == "agent"
-        assert MessageRole.SYSTEM == "system"
-
-    def test_a2a_message_creation(self):
-        """Test A2AMessage model."""
-        from src.messenger import A2AMessage, MessageRole
-
-        msg = A2AMessage(
-            role=MessageRole.USER,
-            parts=[{"kind": "text", "text": "Hello"}],
-        )
-        assert msg.role == MessageRole.USER
+        msg = create_message(Role.agent, "search[shoes]")
+        assert msg.role == Role.agent
         assert len(msg.parts) == 1
-        assert msg.parts[0]["text"] == "Hello"
-        assert msg.messageId is not None
+        assert msg.message_id is not None
 
-    def test_task_status_creation(self):
-        """Test TaskStatus model."""
-        from src.messenger import TaskStatus, TaskState
+    def test_create_message_with_context(self):
+        """Test create_message with context ID."""
+        from a2a.types import Role
+        from src.messenger import create_message
 
-        status = TaskStatus(state=TaskState.WORKING, message="Processing...")
-        assert status.state == TaskState.WORKING
-        assert status.message == "Processing..."
-        assert status.timestamp is not None
+        msg = create_message(Role.user, "Hello", context_id="ctx-123")
+        assert msg.context_id == "ctx-123"
 
-    def test_a2a_task_creation(self):
-        """Test A2ATask model."""
-        from src.messenger import A2ATask, TaskStatus, TaskState
+    def test_get_message_text(self):
+        """Test get_message_text extracts text from SDK Message."""
+        from a2a.types import Message, Role, TextPart
+        from src.messenger import get_message_text
 
-        task = A2ATask(
-            status=TaskStatus(state=TaskState.COMPLETED),
+        msg = Message(
+            messageId="123",
+            role=Role.user,
+            parts=[TextPart(text="Hello world")],
         )
-        assert task.id is not None
-        assert task.contextId is not None
-        assert task.status.state == TaskState.COMPLETED
-        assert task.kind == "task"
+        text = get_message_text(msg)
+        assert text == "Hello world"
 
-    def test_json_rpc_request(self):
-        """Test JSONRPCRequest model."""
-        from src.messenger import JSONRPCRequest
+    def test_get_message_text_multiple_parts(self):
+        """Test get_message_text with multiple text parts."""
+        from a2a.types import Message, Role, TextPart
+        from src.messenger import get_message_text
 
-        request = JSONRPCRequest(method="message/send", params={"test": "value"})
-        assert request.jsonrpc == "2.0"
-        assert request.method == "message/send"
-        assert request.params["test"] == "value"
-        assert request.id is not None
+        msg = Message(
+            messageId="123",
+            role=Role.user,
+            parts=[TextPart(text="Line 1"), TextPart(text="Line 2")],
+        )
+        text = get_message_text(msg)
+        assert "Line 1" in text
+        assert "Line 2" in text
 
-    def test_json_rpc_response(self):
-        """Test JSONRPCResponse model."""
-        from src.messenger import JSONRPCResponse
+    def test_merge_parts(self):
+        """Test merge_parts combines text parts."""
+        from a2a.types import TextPart
+        from src.messenger import merge_parts
 
-        response = JSONRPCResponse(result={"data": "test"}, id="123")
-        assert response.jsonrpc == "2.0"
-        assert response.result["data"] == "test"
-        assert response.id == "123"
-        assert response.error is None
+        parts = [TextPart(text="Part 1"), TextPart(text="Part 2")]
+        # Note: merge_parts expects SDK Part objects
+        # For simplicity, we test the function works with direct TextPart objects
+        result = merge_parts(parts)
+        assert "Part 1" in result
+        assert "Part 2" in result
 
-
-class TestMessengerFactories:
-    """Test message factory functions."""
-
-    def test_create_text_message(self):
-        """Test create_text_message function."""
-        from src.messenger import create_text_message, MessageRole
-
-        msg = create_text_message("Test message", role=MessageRole.AGENT)
-        assert msg.role == MessageRole.AGENT
-        assert len(msg.parts) == 1
-        assert msg.parts[0]["kind"] == "text"
-        assert msg.parts[0]["text"] == "Test message"
-
-    def test_create_task_response(self):
-        """Test create_task_response function."""
-        from src.messenger import create_task_response, A2ATask, TaskStatus, TaskState
-
-        task = A2ATask(status=TaskStatus(state=TaskState.COMPLETED))
-        response = create_task_response(task, "req-123")
-        assert response.id == "req-123"
-        assert response.result is not None
-        assert response.result["status"]["state"] == "completed"
-
-    def test_create_error_response(self):
-        """Test create_error_response function."""
-        from src.messenger import create_error_response
-
-        response = create_error_response(-32600, "Invalid request", "req-456")
-        assert response.id == "req-456"
-        assert response.error is not None
-        assert response.error["code"] == -32600
-        assert response.error["message"] == "Invalid request"
-
-    def test_create_shopper_agent_card(self):
-        """Test create_shopper_agent_card function."""
-        from src.messenger import create_shopper_agent_card
-
-        card = create_shopper_agent_card("http://localhost:8001")
-        assert card.name == "WebShop+ Shopper Agent"
-        assert card.url == "http://localhost:8001/a2a"
-        assert card.protocolVersion == "0.3.0"
-        assert len(card.skills) == 1
-        assert card.skills[0].id == "shopping"
-
-
-class TestMessengerParsing:
-    """Test message parsing utilities."""
-
-    def test_get_text_from_message(self):
-        """Test get_text_from_message function."""
-        from src.messenger import get_text_from_message
+    def test_get_text_from_dict_message(self):
+        """Test get_text_from_dict_message function."""
+        from src.messenger import get_text_from_dict_message
 
         message = {
             "parts": [
@@ -149,48 +86,62 @@ class TestMessengerParsing:
                 {"kind": "text", "text": "Second line"},
             ]
         }
-        text = get_text_from_message(message)
+        text = get_text_from_dict_message(message)
         assert "First line" in text
         assert "Second line" in text
 
-    def test_get_text_from_message_empty(self):
-        """Test get_text_from_message with empty message."""
-        from src.messenger import get_text_from_message
+    def test_get_text_from_dict_message_empty(self):
+        """Test get_text_from_dict_message with empty message."""
+        from src.messenger import get_text_from_dict_message
 
-        assert get_text_from_message({}) == ""
-        assert get_text_from_message({"parts": []}) == ""
+        assert get_text_from_dict_message({}) == ""
+        assert get_text_from_dict_message({"parts": []}) == ""
+
+
+class TestMessengerParsing:
+    """Test message parsing utilities."""
 
     def test_extract_task_instruction_with_prefix(self):
         """Test extract_task_instruction with TASK: prefix."""
         from src.messenger import extract_task_instruction
 
-        message = {"parts": [{"kind": "text", "text": "TASK: Find running shoes under $100"}]}
-        instruction = extract_task_instruction(message)
+        instruction = extract_task_instruction("TASK: Find running shoes under $100")
         assert instruction == "Find running shoes under $100"
 
     def test_extract_task_instruction_without_prefix(self):
         """Test extract_task_instruction without TASK: prefix."""
         from src.messenger import extract_task_instruction
 
-        message = {"parts": [{"kind": "text", "text": "Buy a laptop with 16GB RAM"}]}
-        instruction = extract_task_instruction(message)
+        instruction = extract_task_instruction("Buy a laptop with 16GB RAM")
         assert instruction == "Buy a laptop with 16GB RAM"
+
+    def test_extract_task_instruction_empty(self):
+        """Test extract_task_instruction with empty string."""
+        from src.messenger import extract_task_instruction
+
+        assert extract_task_instruction("") is None
+        assert extract_task_instruction(None) is None
 
     def test_extract_observation_with_prefix(self):
         """Test extract_observation with OBSERVATION: prefix."""
         from src.messenger import extract_observation
 
-        message = {"parts": [{"kind": "text", "text": "OBSERVATION: Found 10 products"}]}
-        observation = extract_observation(message)
+        observation = extract_observation("OBSERVATION: Found 10 products")
         assert observation == "Found 10 products"
 
     def test_extract_observation_webshop_keywords(self):
         """Test extract_observation recognizes WebShop output."""
         from src.messenger import extract_observation
 
-        message = {"parts": [{"kind": "text", "text": "Search results: 5 products found. Price: $50"}]}
-        observation = extract_observation(message)
+        observation = extract_observation("Search results: 5 products found. Price: $50")
         assert "products found" in observation.lower()
+
+    def test_extract_observation_empty(self):
+        """Test extract_observation with empty string."""
+        from src.messenger import extract_observation
+
+        assert extract_observation("") is None
+        assert extract_observation(None) is None
 
     def test_format_action_response_valid(self):
         """Test format_action_response with valid action."""
@@ -203,9 +154,37 @@ class TestMessengerParsing:
         """Test format_action_response with natural language."""
         from src.messenger import format_action_response
 
-        # These should be converted or passed through
         result = format_action_response("search for running shoes")
-        assert "search[" in result or "running shoes" in result
+        assert "search[" in result
+
+
+class TestMessengerClass:
+    """Test Messenger class functionality."""
+
+    def test_messenger_initialization(self):
+        """Test Messenger initializes with empty context."""
+        from src.messenger import Messenger
+
+        messenger = Messenger()
+        assert messenger._context_ids == {}
+
+    def test_messenger_reset(self):
+        """Test Messenger reset clears context IDs."""
+        from src.messenger import Messenger
+
+        messenger = Messenger()
+        messenger._context_ids["http://example.com/a2a"] = "ctx-123"
+        messenger.reset()
+        assert messenger._context_ids == {}
+
+    def test_messenger_get_context_id(self):
+        """Test Messenger get_context_id returns correct ID."""
+        from src.messenger import Messenger
+
+        messenger = Messenger()
+        messenger._context_ids["http://example.com/a2a"] = "ctx-123"
+        assert messenger.get_context_id("http://example.com/a2a") == "ctx-123"
+        assert messenger.get_context_id("http://other.com/a2a") is None
 
 
 # =============================================================================
@@ -509,161 +488,6 @@ Description: Great running shoes"""
 
         action3 = agent.process_observation(product_page)
         assert "click[" in action3  # Should click buy or an option
-
-
-# =============================================================================
-# Server Tests
-# =============================================================================
-
-
-class TestServerEndpoints:
-    """Test server endpoints."""
-
-    @pytest.fixture
-    def client(self):
-        """Create test client."""
-        from src.server_legacy import app
-
-        return TestClient(app)
-
-    def test_health_check(self, client):
-        """Test health check endpoint."""
-        response = client.get("/health")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "healthy"
-        assert data["service"] == "webshop-plus-purple"
-
-    def test_agent_card_endpoint(self, client):
-        """Test agent card endpoint."""
-        response = client.get("/.well-known/agent-card.json")
-        assert response.status_code == 200
-
-        card = response.json()
-        assert card["name"] == "WebShop+ Shopper Agent"
-        assert "skills" in card
-        assert len(card["skills"]) > 0
-
-    def test_a2a_message_send(self, client):
-        """Test A2A message/send method."""
-        with patch("src.server_legacy._get_or_create_agent") as mock_get_agent:
-            # Create a mock agent
-            mock_agent = MagicMock()
-            mock_agent.context.action_history = []
-            mock_agent.process_task_instruction.return_value = "search[test product]"
-            mock_get_agent.return_value = mock_agent
-
-            request_body = {
-                "jsonrpc": "2.0",
-                "method": "message/send",
-                "params": {
-                    "message": {
-                        "role": "user",
-                        "parts": [{"kind": "text", "text": "TASK: Find running shoes"}],
-                    }
-                },
-                "id": "test-123",
-            }
-
-            response = client.post("/a2a", json=request_body)
-            assert response.status_code == 200
-
-            data = response.json()
-            assert data["jsonrpc"] == "2.0"
-            assert data["id"] == "test-123"
-            assert "result" in data
-
-    def test_a2a_invalid_method(self, client):
-        """Test A2A with invalid method."""
-        request_body = {
-            "jsonrpc": "2.0",
-            "method": "invalid/method",
-            "params": {},
-            "id": "test-456",
-        }
-
-        response = client.post("/a2a", json=request_body)
-        assert response.status_code == 400
-
-        data = response.json()
-        assert "error" in data
-        assert data["error"]["code"] == -32601
-
-    def test_a2a_parse_error(self, client):
-        """Test A2A with invalid JSON."""
-        response = client.post(
-            "/a2a",
-            content="not valid json",
-            headers={"Content-Type": "application/json"},
-        )
-        assert response.status_code == 400
-
-        data = response.json()
-        assert "error" in data
-        assert data["error"]["code"] == -32700
-
-
-class TestServerSessionManagement:
-    """Test server session management."""
-
-    def test_get_or_create_agent_new_session(self):
-        """Test creating a new session."""
-        from src.server_legacy import _get_or_create_agent, state
-
-        # Clear existing sessions
-        state.sessions.clear()
-
-        agent = _get_or_create_agent("context-123", "task-456")
-        assert "context-123" in state.sessions
-        assert agent.context.task_id == "task-456"
-
-    def test_get_or_create_agent_existing_session(self):
-        """Test retrieving existing session."""
-        from src.server_legacy import _get_or_create_agent, state
-
-        # Create initial session
-        agent1 = _get_or_create_agent("context-789", "task-001")
-
-        # Get same session
-        agent2 = _get_or_create_agent("context-789", "task-002")
-
-        # Should be the same agent instance
-        assert agent1 is agent2
-
-    def test_process_message_task_instruction(self):
-        """Test processing task instruction message."""
-        from src.server_legacy import _process_message
-        from src.agent import ShopperAgent
-
-        agent = ShopperAgent()
-        agent.llm_client = MagicMock()
-        agent.llm_client.complete.return_value = """PRODUCT_TYPE: shoes
-BUDGET: none
-PREFERENCES: none
-CONSTRAINTS: none
-COMPARISON_REQUIRED: no
-SEARCH_QUERY: shoes"""
-
-        action = _process_message(agent, "TASK: Find shoes", {})
-        assert "search[" in action
-
-    def test_process_message_observation(self):
-        """Test processing observation message."""
-        from src.server_legacy import _process_message
-        from src.agent import ShopperAgent, AgentState
-
-        agent = ShopperAgent()
-        agent.llm_client = MagicMock()
-        agent.llm_client.complete.return_value = "B07XYZ123"
-
-        # Set up agent state
-        agent.context.state = AgentState.SEARCHING
-        agent.context.action_history = ["search[shoes]"]
-
-        action = _process_message(
-            agent, "Search results: B07XYZ123 - Shoes - $50", {"type": "observation"}
-        )
-        assert "click[" in action or "search[" in action
 
 
 # =============================================================================
