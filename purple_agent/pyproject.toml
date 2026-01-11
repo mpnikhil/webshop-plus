@@ -12,6 +12,7 @@ dependencies = [
     "litellm>=1.0.0",
     "python-dotenv>=1.0.0",
     "structlog>=23.1.0",
+    "a2a-sdk[http-server]>=0.3.20",
 ]
 
 [project.optional-dependencies]
