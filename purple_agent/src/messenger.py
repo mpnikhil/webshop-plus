@@ -12,9 +12,11 @@ Based on A2A Protocol v0.3.0 specification.
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import structlog
+from a2a.types import Message as SDKMessage
+from a2a.types import TextPart as SDKTextPart
 from pydantic import BaseModel, Field
 
 logger = structlog.get_logger()
@@ -315,6 +317,25 @@ def create_shopper_agent_card(base_url: str) -> AgentCard:
 # =============================================================================
 # Message Parsing Utilities
 # =============================================================================
+
+
+def get_message_text(message: SDKMessage) -> str:
+    """Extract all text content from an A2A SDK Message.
+
+    Args:
+        message: An A2A SDK Message object.
+
+    Returns:
+        Concatenated text content from all text parts.
+    """
+    texts = []
+    for part in message.parts:
+        # SDK Part wraps the actual part type in a 'root' attribute
+        actual_part = part.root if hasattr(part, "root") else part
+        # Check if the actual part has a 'text' attribute (TextPart)
+        if hasattr(actual_part, "text"):
+            texts.append(actual_part.text)
+    return "\n".join(texts)
 
 
 def get_text_from_message(message: dict[str, Any]) -> str:

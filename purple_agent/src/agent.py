@@ -12,14 +12,18 @@ conversation context within a shopping session.
 """
 
 import re
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
 import structlog
+from a2a.server.tasks import TaskUpdater
+from a2a.types import Message, Role, TaskState, TextPart
 from pydantic import BaseModel
 
 from src.llm_client import LLMClient
+from src.messenger import get_message_text
 
 logger = structlog.get_logger()
 
@@ -216,6 +220,54 @@ class ShopperAgent:
         """
         self.context = SessionContext(task_id=task_id)
         logger.info("Agent reset", task_id=task_id)
+
+    async def run(self, message: Message, updater: TaskUpdater) -> None:
+        """Process a message and update status via TaskUpdater.
+
+        This method implements the agent-template Agent interface for SDK integration.
+
+        IMPORTANT: Actions are returned as messages (not artifacts) because
+        the green agent's parse_action_from_response() looks for actions in:
+        1. result.history[].role=="agent" -> parts -> text
+        2. result.message -> parts -> text
+
+        Args:
+            message: Incoming A2A SDK Message.
+            updater: TaskUpdater for status/artifact updates.
+        """
+        text = get_message_text(message)
+        logger.info("Agent.run() called", text_length=len(text))
+
+        # Signal that we're working on the task
+        await updater.update_status(
+            state=TaskState.working,
+            message=Message(
+                messageId=str(uuid.uuid4()),
+                role=Role.agent,
+                parts=[TextPart(text="Processing...")]
+            )
+        )
+
+        # Use agent state to determine message type:
+        # - No requirements set = new task instruction
+        # - Requirements set = observation from environment
+        if self.context.requirements is None:
+            # New task instruction - first message in a session
+            action = self.process_task_instruction(text)
+        else:
+            # Ongoing session - this is an observation
+            action = self.process_observation(text)
+
+        logger.info("Agent.run() completed", action=action)
+
+        # Return action as a message - green agent parses from messages, not artifacts
+        await updater.complete(
+            message=Message(
+                messageId=str(uuid.uuid4()),
+                role=Role.agent,
+                parts=[TextPart(text=action)]
+            )
+        )
 
     def process_task_instruction(self, instruction: str) -> str:
         """Process a task instruction and return the first action.
