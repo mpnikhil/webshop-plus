@@ -1,8 +1,19 @@
 """Tests for WebShop wrapper."""
 
+import os
+from pathlib import Path
+
 import pytest
 
 from src.webshop_wrapper import WebShopWrapper, StepResult
+
+# Skip all tests in this module if WebShop data files are not available
+# This allows CI to pass without requiring the large WebShop dataset
+WEBSHOP_DATA_FILE = Path(__file__).parent.parent.parent / "webshop" / "data" / "items_shuffle_1000.json"
+pytestmark = pytest.mark.skipif(
+    not WEBSHOP_DATA_FILE.exists(),
+    reason="WebShop data files not available (required for wrapper tests)"
+)
 
 
 class TestWebShopWrapper:
