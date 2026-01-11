@@ -12,6 +12,8 @@ Usage:
 """
 
 import argparse
+from contextlib import asynccontextmanager
+
 import structlog
 import uvicorn
 from starlette.applications import Starlette
@@ -298,11 +300,17 @@ def create_app(card_url: str = "http://localhost:8001") -> Starlette:
         Route("/health", health_check, methods=["GET"]),
     ]
 
+    # Create lifespan context manager for startup/shutdown logging
+    @asynccontextmanager
+    async def lifespan(app):
+        logger.info("Starting WebShop+ A2A server (SDK)", card_url=card_url)
+        yield
+        logger.info("Shutting down WebShop+ A2A server (SDK)")
+
     app = Starlette(
         routes=routes,
         middleware=middleware,
-        on_startup=[lambda: logger.info("Starting WebShop+ A2A server (SDK)", card_url=card_url)],
-        on_shutdown=[lambda: logger.info("Shutting down WebShop+ A2A server (SDK)")],
+        lifespan=lifespan,
     )
 
     # Add A2A routes to our app

@@ -978,7 +978,7 @@ Score from 0-10 where:
             )
             normalized_score = score / 10.0
             return normalized_score, explanation
-        except Exception as e:
+        except Exception:
             # Fall back to heuristic if LLM fails
             return self._heuristic_justification_score(justification)
 

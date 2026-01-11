@@ -28,7 +28,6 @@ from .webshop_patched import (
     NEXT_PAGE,
     PREV_PAGE,
     BACK_TO_SEARCH,
-    SEARCH_RETURN_N,
     DEFAULT_FILE_PATH,
 )
 from .webshop_patched.goal import get_goals, get_reward

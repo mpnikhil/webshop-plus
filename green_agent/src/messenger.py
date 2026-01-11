@@ -3,9 +3,12 @@ A2A Protocol messenger utilities for WebShop+ green agent.
 
 This module provides utilities for A2A (Agent-to-Agent) protocol communication:
 - JSON-RPC message formatting and parsing
-- Agent card generation
 - HTTP client for sending messages to purple agents
-- SSE (Server-Sent Events) streaming utilities
+- SSE (Server-Sent Events) event creation utilities
+- Response parsing utilities
+
+Note: Agent card types and server-side request handling are now in server.py
+using the official a2a-sdk types.
 
 Based on A2A Protocol v0.3.0 specification.
 """
@@ -143,55 +146,6 @@ class JSONRPCError(BaseModel):
 
 
 # =============================================================================
-# Agent Card Models
-# =============================================================================
-
-
-class AgentSkill(BaseModel):
-    """A skill that an agent can perform."""
-
-    id: str
-    name: str
-    description: str
-    tags: list[str] = Field(default_factory=list)
-    examples: list[str] = Field(default_factory=list)
-    inputModes: list[str] = Field(default_factory=lambda: ["text/plain"])
-    outputModes: list[str] = Field(default_factory=lambda: ["text/plain"])
-    inputSchema: Optional[dict[str, Any]] = None
-
-
-class AgentCapabilities(BaseModel):
-    """Capabilities of an agent."""
-
-    streaming: bool = True
-    pushNotifications: bool = False
-    stateTransitionHistory: bool = False
-
-
-class AgentProvider(BaseModel):
-    """Provider information for an agent."""
-
-    organization: str
-    url: Optional[str] = None
-
-
-class AgentCard(BaseModel):
-    """Agent card describing an agent's capabilities and endpoints."""
-
-    protocolVersion: str = "0.3.0"
-    name: str
-    description: str
-    version: str = "1.0.0"
-    url: str  # The A2A endpoint URL
-    preferredTransport: str = "JSONRPC"
-    provider: Optional[AgentProvider] = None
-    capabilities: AgentCapabilities = Field(default_factory=AgentCapabilities)
-    defaultInputModes: list[str] = Field(default_factory=lambda: ["text/plain"])
-    defaultOutputModes: list[str] = Field(default_factory=lambda: ["text/plain", "application/json"])
-    skills: list[AgentSkill] = Field(default_factory=list)
-
-
-# =============================================================================
 # Message Factory Functions
 # =============================================================================
 
@@ -271,52 +225,6 @@ def create_message_stream_request(
     )
 
 
-def create_task_response(
-    task: A2ATask,
-    request_id: str,
-) -> JSONRPCResponse:
-    """Create a JSON-RPC response containing a task.
-
-    Args:
-        task: The A2A task to include in the response.
-        request_id: The request ID to echo back.
-
-    Returns:
-        A JSONRPCResponse with the task as result.
-    """
-    return JSONRPCResponse(
-        result=task.model_dump(exclude_none=True),
-        id=request_id,
-    )
-
-
-def create_error_response(
-    code: int,
-    message: str,
-    request_id: str,
-    data: Optional[dict[str, Any]] = None,
-) -> JSONRPCResponse:
-    """Create a JSON-RPC error response.
-
-    Args:
-        code: Error code (negative for server errors).
-        message: Error message.
-        request_id: The request ID to echo back.
-        data: Optional additional error data.
-
-    Returns:
-        A JSONRPCResponse with the error.
-    """
-    return JSONRPCResponse(
-        error={
-            "code": code,
-            "message": message,
-            "data": data,
-        },
-        id=request_id,
-    )
-
-
 def create_status_update_event(
     task_id: str,
     context_id: str,
@@ -388,209 +296,6 @@ def create_artifact_update_event(
             "kind": "artifact-update",
         },
     }
-
-
-# =============================================================================
-# Agent Card Factory
-# =============================================================================
-
-
-def create_webshop_plus_agent_card(base_url: str) -> AgentCard:
-    """Create the WebShop+ green agent card.
-
-    Args:
-        base_url: The base URL where the agent is hosted (e.g., http://localhost:8000).
-
-    Returns:
-        An AgentCard for the WebShop+ benchmark.
-    """
-    # Common schema for participants - required for all skills
-    participants_schema = {
-        "type": "object",
-        "properties": {
-            "shopper": {
-                "type": "string",
-                "format": "uri",
-                "description": "The A2A endpoint URL of the shopping agent to evaluate.",
-            }
-        },
-        "required": ["shopper"],
-    }
-
-    # Full assessment config schema
-    full_config_schema = {
-        "type": "object",
-        "properties": {
-            "num_tasks": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 100,
-                "default": 80,
-                "description": "Total number of tasks to run across all categories.",
-            },
-            "categories": {
-                "type": "array",
-                "items": {
-                    "type": "string",
-                    "enum": [
-                        "budget",
-                        "memory",
-                        "constraint",
-                        "reasoning",
-                        "recovery",
-                    ],
-                },
-                "description": "Categories to include in the assessment. Default: all.",
-            },
-            "timeout_per_task": {
-                "type": "integer",
-                "minimum": 30,
-                "maximum": 600,
-                "default": 120,
-                "description": "Timeout in seconds for each task.",
-            },
-            "max_steps_per_task": {
-                "type": "integer",
-                "minimum": 5,
-                "maximum": 50,
-                "default": 15,
-                "description": "Maximum interaction steps per task.",
-            },
-        },
-    }
-
-    # Category-specific config schema
-    category_config_schema = {
-        "type": "object",
-        "properties": {
-            "num_tasks": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 20,
-                "default": 16,
-                "description": "Number of tasks to run for this category.",
-            },
-            "timeout_per_task": {
-                "type": "integer",
-                "minimum": 30,
-                "maximum": 600,
-                "default": 120,
-                "description": "Timeout in seconds for each task.",
-            },
-            "max_steps_per_task": {
-                "type": "integer",
-                "minimum": 5,
-                "maximum": 50,
-                "default": 15,
-                "description": "Maximum interaction steps per task.",
-            },
-        },
-    }
-
-    # Full assessment input schema
-    full_assessment_schema = {
-        "type": "object",
-        "properties": {
-            "participants": participants_schema,
-            "config": full_config_schema,
-        },
-        "required": ["participants"],
-    }
-
-    # Category assessment input schema
-    category_assessment_schema = {
-        "type": "object",
-        "properties": {
-            "participants": participants_schema,
-            "config": category_config_schema,
-        },
-        "required": ["participants"],
-    }
-
-    return AgentCard(
-        name="WebShop+ Benchmark",
-        description="Evaluates shopping agents on budget management, preference memory, "
-        "constraint satisfaction, comparative reasoning, and error recovery.",
-        version="1.0.0",
-        url=f"{base_url}/a2a",
-        provider=AgentProvider(
-            organization="WebShop+ Team",
-            url="https://github.com/mpnikhil/webshop-plus",
-        ),
-        capabilities=AgentCapabilities(
-            streaming=True,
-            pushNotifications=False,
-            stateTransitionHistory=False,
-        ),
-        skills=[
-            AgentSkill(
-                id="assessment",
-                name="Shopping Agent Assessment",
-                description="Run a comprehensive assessment of a shopping agent across "
-                "80 tasks covering budget management, preference memory, constraint "
-                "satisfaction, comparative reasoning, and error recovery.",
-                tags=["assessment", "benchmark", "shopping", "evaluation"],
-                examples=[
-                    "Assess the shopping agent at http://agent:8001/a2a",
-                    "Run budget constraint tasks only",
-                    "Evaluate with 20 tasks per category",
-                ],
-                inputModes=["application/json"],
-                outputModes=["application/json"],
-                inputSchema=full_assessment_schema,
-            ),
-            AgentSkill(
-                id="budget-assessment",
-                name="Budget Constraint Assessment",
-                description="Evaluate agent on budget management tasks.",
-                tags=["budget", "shopping", "constraints"],
-                examples=["Test budget constraint handling"],
-                inputModes=["application/json"],
-                outputModes=["application/json"],
-                inputSchema=category_assessment_schema,
-            ),
-            AgentSkill(
-                id="memory-assessment",
-                name="Preference Memory Assessment",
-                description="Evaluate agent on preference recall across sessions.",
-                tags=["memory", "preferences", "recall"],
-                examples=["Test preference memory"],
-                inputModes=["application/json"],
-                outputModes=["application/json"],
-                inputSchema=category_assessment_schema,
-            ),
-            AgentSkill(
-                id="constraint-assessment",
-                name="Negative Constraint Assessment",
-                description="Evaluate agent on avoiding forbidden attributes.",
-                tags=["constraints", "avoidance", "shopping"],
-                examples=["Test negative constraint handling"],
-                inputModes=["application/json"],
-                outputModes=["application/json"],
-                inputSchema=category_assessment_schema,
-            ),
-            AgentSkill(
-                id="reasoning-assessment",
-                name="Comparative Reasoning Assessment",
-                description="Evaluate agent on product comparison and justification.",
-                tags=["reasoning", "comparison", "shopping"],
-                examples=["Test comparative reasoning"],
-                inputModes=["application/json"],
-                outputModes=["application/json"],
-                inputSchema=category_assessment_schema,
-            ),
-            AgentSkill(
-                id="recovery-assessment",
-                name="Error Recovery Assessment",
-                description="Evaluate agent on identifying and fixing cart errors.",
-                tags=["recovery", "errors", "cart"],
-                examples=["Test error recovery"],
-                inputModes=["application/json"],
-                outputModes=["application/json"],
-                inputSchema=category_assessment_schema,
-            ),
-        ],
-    )
 
 
 # =============================================================================
@@ -732,14 +437,14 @@ class A2AClient:
                         except json.JSONDecodeError:
                             logger.warning("Failed to parse SSE data", data=data_str)
 
-    async def get_agent_card(self, base_url: str) -> Optional[AgentCard]:
+    async def get_agent_card(self, base_url: str) -> Optional[dict[str, Any]]:
         """Fetch an agent's card from the well-known endpoint.
 
         Args:
             base_url: The agent's base URL.
 
         Returns:
-            The agent card, or None if not found.
+            The agent card as a dictionary, or None if not found.
         """
         if not self._client:
             raise RuntimeError("Client not initialized. Use 'async with' context.")
@@ -749,8 +454,7 @@ class A2AClient:
             url = f"{base_url.rstrip('/')}/.well-known/agent-card.json"
             response = await self._client.get(url)
             response.raise_for_status()
-            data = response.json()
-            return AgentCard(**data)
+            return response.json()
         except Exception as e:
             logger.warning("Failed to fetch agent card", url=base_url, error=str(e))
             return None

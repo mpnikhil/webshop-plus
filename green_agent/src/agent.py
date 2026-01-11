@@ -9,17 +9,15 @@ This module provides the main orchestration logic for running assessments:
 
 import asyncio
 import uuid
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Callable, Optional
 
 import structlog
 
 from .evaluator import Evaluator
-from .executor import Executor, ExecutorConfig, ExecutorResult
+from .executor import Executor, ExecutorConfig
 from .llm_client import LLMClient
 from .messenger import (
-    A2AClient,
     Artifact,
     TaskState,
     create_artifact_update_event,

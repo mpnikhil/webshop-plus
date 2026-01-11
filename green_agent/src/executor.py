@@ -10,7 +10,7 @@ It provides:
 """
 
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, AsyncIterator, Optional
 
@@ -19,13 +19,10 @@ import structlog
 from .messenger import (
     A2AClient,
     A2AMessage,
-    Artifact,
     JSONRPCResponse,
     MessageRole,
-    TaskState,
     create_text_message,
     extract_action_from_text,
-    get_text_from_message,
     parse_action_from_response,
 )
 
