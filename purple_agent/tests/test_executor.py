@@ -18,11 +18,7 @@ from a2a.types import (
     Role,
     TaskState,
     TextPart,
-    UnsupportedOperationError,
-    Task,
-    TaskStatus,
 )
-from a2a.utils.errors import ServerError
 
 
 # =============================================================================
@@ -240,18 +236,33 @@ class TestExecutorCancel:
     """Test Executor.cancel() method."""
 
     @pytest.mark.asyncio
-    async def test_cancel_raises_unsupported(self, mock_request_context, mock_event_queue):
-        """Test cancel raises ServerError wrapping UnsupportedOperationError."""
+    async def test_cancel_publishes_cancelled_status(self, mock_request_context, mock_event_queue):
+        """Test cancel publishes cancelled status for TCK conformance."""
         from src.executor import Executor
 
         executor = Executor()
 
-        with pytest.raises(ServerError) as exc_info:
-            await executor.cancel(mock_request_context, mock_event_queue)
+        # Cancel should not raise, it should publish cancelled status
+        await executor.cancel(mock_request_context, mock_event_queue)
 
-        # Verify the error contains UnsupportedOperationError
-        assert isinstance(exc_info.value.error, UnsupportedOperationError)
-        assert "Cancel operation is not supported" in exc_info.value.error.message
+        # Verify cancelled status was published (via event queue)
+        assert mock_event_queue.enqueue_event.called
+
+    @pytest.mark.asyncio
+    async def test_cancel_simple_task(self, mock_request_context, mock_event_queue):
+        """Test cancelling a simple task that's being tracked."""
+        from src.executor import Executor
+
+        executor = Executor()
+        task_id = mock_request_context.task_id
+
+        # Track a simple task
+        executor._simple_task_states[task_id] = {"message_count": 1}
+
+        await executor.cancel(mock_request_context, mock_event_queue)
+
+        # Task should be removed from tracking
+        assert task_id not in executor._simple_task_states
 
 
 # =============================================================================
