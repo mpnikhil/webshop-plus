@@ -522,7 +522,7 @@ class TestServerEndpoints:
     @pytest.fixture
     def client(self):
         """Create test client."""
-        from src.server import app
+        from src.server_legacy import app
 
         return TestClient(app)
 
@@ -546,7 +546,7 @@ class TestServerEndpoints:
 
     def test_a2a_message_send(self, client):
         """Test A2A message/send method."""
-        with patch("src.server._get_or_create_agent") as mock_get_agent:
+        with patch("src.server_legacy._get_or_create_agent") as mock_get_agent:
             # Create a mock agent
             mock_agent = MagicMock()
             mock_agent.context.action_history = []
@@ -608,7 +608,7 @@ class TestServerSessionManagement:
 
     def test_get_or_create_agent_new_session(self):
         """Test creating a new session."""
-        from src.server import _get_or_create_agent, state
+        from src.server_legacy import _get_or_create_agent, state
 
         # Clear existing sessions
         state.sessions.clear()
@@ -619,7 +619,7 @@ class TestServerSessionManagement:
 
     def test_get_or_create_agent_existing_session(self):
         """Test retrieving existing session."""
-        from src.server import _get_or_create_agent, state
+        from src.server_legacy import _get_or_create_agent, state
 
         # Create initial session
         agent1 = _get_or_create_agent("context-789", "task-001")
@@ -632,7 +632,7 @@ class TestServerSessionManagement:
 
     def test_process_message_task_instruction(self):
         """Test processing task instruction message."""
-        from src.server import _process_message
+        from src.server_legacy import _process_message
         from src.agent import ShopperAgent
 
         agent = ShopperAgent()
@@ -649,7 +649,7 @@ SEARCH_QUERY: shoes"""
 
     def test_process_message_observation(self):
         """Test processing observation message."""
-        from src.server import _process_message
+        from src.server_legacy import _process_message
         from src.agent import ShopperAgent, AgentState
 
         agent = ShopperAgent()

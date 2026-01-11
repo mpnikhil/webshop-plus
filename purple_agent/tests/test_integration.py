@@ -17,7 +17,7 @@ import pytest
 from starlette.testclient import TestClient
 from unittest.mock import patch, MagicMock
 
-from src.server_new import create_app, create_agent_card
+from src.server import create_app, create_agent_card
 
 
 # =============================================================================
