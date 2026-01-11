@@ -181,8 +181,12 @@ class TestWebShopPlusExecutor:
         assert executor._agent_config.max_actions_per_task == 50
 
     @pytest.mark.asyncio
-    async def test_execute_rejects_missing_participants(self):
-        """Should reject request without participants."""
+    async def test_execute_handles_missing_participants_as_simple_message(self):
+        """Should handle request without participants as simple echo message.
+
+        This supports A2A TCK conformance testing where simple messages
+        need to be processed without requiring assessment participants.
+        """
         executor = WebShopPlusExecutor()
 
         # Create mock context with empty metadata
@@ -198,13 +202,12 @@ class TestWebShopPlusExecutor:
 
         await executor.execute(mock_context, mock_queue)
 
-        # Verify reject was called (via TaskUpdater.reject)
-        # The queue should have received a TaskStatusUpdateEvent with rejected state
+        # Verify events were emitted (start_work + requires_input)
         assert mock_queue.enqueue_event.called
         events = [call.args[0] for call in mock_queue.enqueue_event.call_args_list]
-        # Check that we got a rejected status
+        # Check that we got an input-required status (allowing continuation/cancellation)
         final_event = events[-1]
-        assert final_event.status.state.value == "rejected"
+        assert final_event.status.state.value == "input-required"
 
     @pytest.mark.asyncio
     async def test_cancel_no_active_task(self):
