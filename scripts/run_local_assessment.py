@@ -201,6 +201,7 @@ async def run_assessment(
         "method": "message/stream",
         "params": {
             "message": {
+                "messageId": "assessment-msg-1",
                 "role": "user",
                 "parts": [
                     {
@@ -214,11 +215,9 @@ async def run_assessment(
                     "shopper": f"{purple_url}/a2a",
                 },
                 "config": {
-                    "task_types": task_types,
+                    "categories": task_types,  # Note: green agent expects "categories", not "task_types"
                     "num_tasks": num_tasks,
                     "timeout_per_task": timeout_per_task,
-                    "include_memory_tasks": "preference_memory" in task_types
-                    or "all" in task_types,
                 },
             },
         },

@@ -36,6 +36,12 @@ from a2a.types import (
 from src.a2a_executor import WebShopPlusExecutor
 from src.agent import AgentConfig
 from src.webshop_mcp import SessionManager
+from src.webshop_mcp.server import (
+    current_session_id,
+    is_session_registered,
+    mcp,
+    get_mcp_app,
+)
 
 logger = structlog.get_logger()
 
@@ -46,23 +52,26 @@ logger = structlog.get_logger()
 
 
 class MCPRouteHandler:
-    """ASGI handler that routes MCP requests to session-scoped MCP servers.
+    """ASGI handler that routes MCP requests to the global MCP server.
 
-    This handler extracts the session_id from the URL path and delegates
-    the request to the corresponding session's MCP application.
+    This handler extracts the session_id from the URL path, sets the
+    contextvar for session isolation, and delegates to the global MCP app.
 
     Example:
         handler = MCPRouteHandler(session_manager)
-        # Requests to /mcp/{session_id}/* are routed to the session's MCP app
+        # Requests to /mcp/{session_id}/* are routed to the global MCP app
+        # with session_id set in contextvar
     """
 
-    def __init__(self, session_manager: SessionManager):
+    def __init__(self, session_manager: SessionManager, mcp_app):
         """Initialize the MCP route handler.
 
         Args:
             session_manager: SessionManager instance for looking up sessions.
+            mcp_app: The global MCP Starlette app.
         """
         self.session_manager = session_manager
+        self.mcp_app = mcp_app
 
     async def __call__(self, scope, receive, send) -> None:
         """ASGI entrypoint for MCP requests.
@@ -75,46 +84,76 @@ class MCPRouteHandler:
         if scope["type"] != "http":
             return
 
-        # Extract session_id from path: /mcp/{session_id}/...
+        # Extract session_id from path
+        # NOTE: Starlette Mount strips the mount prefix, so:
+        # - If mounted at "/mcp", request to "/mcp/session123" arrives as "/session123"
+        # - If NOT mounted (direct route), request arrives as "/mcp/session123"
         path = scope.get("path", "")
-        parts = path.split("/mcp/")
 
-        if len(parts) < 2:
-            await self._send_error(send, 400, "Invalid MCP path")
+        # Handle both mounted (path starts with /) and non-mounted cases
+        if path.startswith("/mcp/"):
+            # Non-mounted case: /mcp/{session_id}/...
+            path_after_prefix = path[5:]  # Remove "/mcp/"
+        elif path.startswith("/"):
+            # Mounted case: /{session_id}/...
+            path_after_prefix = path[1:]  # Remove leading "/"
+        else:
+            await self._send_error(send, 400, f"Invalid MCP path: {path}")
             return
 
-        # Get session_id (may have additional path segments after it)
-        session_parts = parts[1].split("/", 1)
-        session_id = session_parts[0]
+        # Split to get session_id and remaining path
+        path_parts = path_after_prefix.split("/", 1)
+        session_id = path_parts[0] if path_parts else ""
+
+        # Remaining path after session_id (if any)
+        remaining_after_session = path_parts[1] if len(path_parts) > 1 else ""
 
         if not session_id:
             await self._send_error(send, 400, "Missing session_id in path")
             return
 
-        # Look up session
-        session = await self.session_manager.get_session(session_id)
-
-        if session is None:
+        # Verify session exists
+        if not is_session_registered(session_id):
             logger.warning("MCP session not found", session_id=session_id)
             await self._send_error(send, 404, f"Session '{session_id}' not found")
             return
 
-        # Get the session's MCP app and delegate
-        mcp_app = session.get_app()
+        # Set the contextvar for this request
+        # This allows tools to access the correct session state
+        token = current_session_id.set(session_id)
 
-        # Adjust the path for the MCP app (remove /mcp/{session_id} prefix)
-        remaining_path = "/" + session_parts[1] if len(session_parts) > 1 else "/"
-        modified_scope = dict(scope)
-        modified_scope["path"] = remaining_path
+        try:
+            # Adjust the path for the MCP app
+            # FastMCP streamable_http_app() creates routes at /mcp
+            modified_path = "/mcp"
+            if remaining_after_session:
+                modified_path += "/" + remaining_after_session
+            modified_scope = dict(scope)
+            modified_scope["path"] = modified_path
+            # Also reset root_path since we're handling the full path ourselves
+            modified_scope["root_path"] = ""
 
-        logger.debug(
-            "Routing MCP request",
-            session_id=session_id,
-            original_path=path,
-            modified_path=remaining_path,
-        )
+            logger.info(
+                "Routing MCP request",
+                session_id=session_id,
+                original_path=path,
+                modified_path=modified_path,
+                method=scope.get("method"),
+                root_path=scope.get("root_path", ""),
+            )
 
-        await mcp_app(modified_scope, receive, send)
+            # Log available routes for debugging
+            if hasattr(self.mcp_app, "routes"):
+                route_info = [
+                    f"{r.path} ({getattr(r, 'methods', 'any')})"
+                    for r in self.mcp_app.routes
+                ]
+                logger.debug("FastMCP routes", routes=route_info)
+
+            await self.mcp_app(modified_scope, receive, send)
+        finally:
+            # Reset the contextvar
+            current_session_id.reset(token)
 
     async def _send_error(self, send, status: int, message: str) -> None:
         """Send an HTTP error response.
@@ -185,14 +224,14 @@ def create_sdk_agent_card(base_url: str) -> AgentCard:
                 "items": {
                     "type": "string",
                     "enum": [
-                        "budget",
-                        "memory",
-                        "constraint",
-                        "reasoning",
-                        "recovery",
+                        "budget_constrained",
+                        "preference_memory",
+                        "negative_constraint",
+                        "comparative_reasoning",
+                        "error_recovery",
                     ],
                 },
-                "description": "Categories to include in the assessment. Default: all.",
+                "description": "Task types to include (uses exact TaskType enum values). Default: all.",
             },
             "timeout_per_task": {
                 "type": "integer",
@@ -366,13 +405,17 @@ def create_app(
     card_url: str = "http://localhost:8001",
     host: str = "localhost",
     port: int = 8000,
+    advertise_host: str | None = None,
 ) -> Starlette:
     """Create the SDK-based A2A Starlette application.
 
     Args:
         card_url: Base URL for the agent card.
-        host: Host for MCP URI generation.
+        host: Host to bind the server to (e.g., "0.0.0.0" for all interfaces).
         port: Port for MCP URI generation.
+        advertise_host: Hostname for MCP URIs that clients will use to connect.
+                       If None, defaults to 'localhost' when host is '0.0.0.0',
+                       otherwise uses host. In Docker, set to service name (e.g., 'green').
 
     Returns:
         A Starlette application with A2A and MCP routes.
@@ -380,13 +423,20 @@ def create_app(
     # Create session manager for MCP sessions
     session_manager = SessionManager(max_sessions=100, session_ttl=3600)
 
+    # Determine MCP host for URI generation
+    # Use advertise_host if provided, otherwise default to localhost when binding to all interfaces
+    if advertise_host:
+        mcp_host = advertise_host
+    else:
+        mcp_host = "localhost" if host == "0.0.0.0" else host
+
     # Create SDK components
     agent_card = create_sdk_agent_card(card_url)
     task_store = InMemoryTaskStore()
     executor = WebShopPlusExecutor(
-        agent_config=AgentConfig(),
+        agent_config=AgentConfig(mcp_host=mcp_host, mcp_port=port),
         session_manager=session_manager,
-        mcp_host=host,
+        mcp_host=mcp_host,
         mcp_port=port,
     )
 
@@ -396,8 +446,11 @@ def create_app(
         task_store=task_store,
     )
 
-    # Create MCP route handler
-    mcp_handler = MCPRouteHandler(session_manager)
+    # Get the global MCP app
+    mcp_app = get_mcp_app()
+
+    # Create MCP route handler with the global MCP app
+    mcp_handler = MCPRouteHandler(session_manager, mcp_app)
 
     # Create the A2A Starlette application builder
     a2a_builder = A2AStarletteApplication(
@@ -422,15 +475,27 @@ def create_app(
         Mount("/mcp", app=mcp_handler),
     ]
 
-    # Create lifespan context manager for startup/shutdown logging
+    # Create lifespan context manager that runs the MCP session manager
     @asynccontextmanager
     async def lifespan(app):
         logger.info(
             "Starting WebShop+ A2A server (SDK)",
             card_url=card_url,
-            mcp_base=f"http://{host}:{port}/mcp",
+            mcp_base=f"http://{mcp_host}:{port}/mcp",
         )
-        yield
+        # Run the MCP session manager - this is REQUIRED for FastMCP to work
+        async with mcp.session_manager.run():
+            logger.info("MCP session manager started")
+            # Log FastMCP app routes for debugging
+            if hasattr(mcp_app, "routes"):
+                for route in mcp_app.routes:
+                    logger.info(
+                        "FastMCP route registered",
+                        path=getattr(route, "path", "unknown"),
+                        methods=getattr(route, "methods", "any"),
+                        name=getattr(route, "name", "unnamed"),
+                    )
+            yield
         # Cleanup session manager on shutdown
         await session_manager.cleanup_all()
         logger.info("Shutting down WebShop+ A2A server (SDK)")
@@ -482,6 +547,12 @@ def parse_args() -> argparse.Namespace:
         help="Base URL for the agent card (defaults to http://localhost:PORT)",
     )
     parser.add_argument(
+        "--advertise-host",
+        type=str,
+        default=None,
+        help="Hostname for MCP URIs (defaults to 'localhost' if --host is 0.0.0.0, otherwise same as --host). In Docker, set this to the service name (e.g., 'green').",
+    )
+    parser.add_argument(
         "--log-level",
         type=str,
         default="INFO",
@@ -517,15 +588,22 @@ def main() -> None:
     # Set card URL
     card_url = args.card_url or f"http://localhost:{args.port}"
 
+    # Determine advertise host for MCP URIs
+    # If not specified, default to localhost when binding to 0.0.0.0, otherwise use bind host
+    advertise_host = args.advertise_host
+    if advertise_host is None:
+        advertise_host = "localhost" if args.host == "0.0.0.0" else args.host
+
     logger.info(
         "Starting WebShop+ green agent (SDK-based)",
         host=args.host,
         port=args.port,
         card_url=card_url,
+        advertise_host=advertise_host,
     )
 
     # Create and run the app
-    app = create_app(card_url=card_url, host=args.host, port=args.port)
+    app = create_app(card_url=card_url, host=args.host, port=args.port, advertise_host=advertise_host)
 
     uvicorn.run(
         app,

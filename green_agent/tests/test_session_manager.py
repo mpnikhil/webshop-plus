@@ -17,7 +17,22 @@ import pytest
 
 from src.webshop_mcp.session_manager import SessionManager
 from src.webshop_mcp.session_state import SessionState
-from src.webshop_mcp.server import WebShopMCPServer
+from src.webshop_mcp.server import (
+    is_session_registered,
+    is_session_completed,
+    _session_states,
+    unregister_session,
+)
+
+
+@pytest.fixture(autouse=True)
+def cleanup_global_state():
+    """Clean up global session state before and after each test."""
+    # Clear before
+    _session_states.clear()
+    yield
+    # Clear after
+    _session_states.clear()
 
 
 class TestSessionCreation:
@@ -28,46 +43,46 @@ class TestSessionCreation:
         """Test successful session creation."""
         manager = SessionManager()
 
-        server = await manager.create_session(
+        state = await manager.create_session(
             session_id="test-123",
             goal="Find running shoes under $50",
             budget=50.0,
             constraints=["no synthetic"],
         )
 
-        assert server is not None
-        assert isinstance(server, WebShopMCPServer)
-        assert server.state.session_id == "test-123"
-        assert server.state.goal == "Find running shoes under $50"
-        assert server.state.budget == 50.0
-        assert server.state.constraints == ["no synthetic"]
+        assert state is not None
+        assert isinstance(state, SessionState)
+        assert state.session_id == "test-123"
+        assert state.goal == "Find running shoes under $50"
+        assert state.budget == 50.0
+        assert state.constraints == ["no synthetic"]
 
     @pytest.mark.asyncio
     async def test_create_session_default_constraints(self):
         """Test session creation with default empty constraints."""
         manager = SessionManager()
 
-        server = await manager.create_session(
+        state = await manager.create_session(
             session_id="test-456",
             goal="Find a shirt",
             budget=30.0,
         )
 
-        assert server.state.constraints == []
+        assert state.constraints == []
 
     @pytest.mark.asyncio
     async def test_create_session_custom_max_turns(self):
         """Test session creation with custom max turns."""
         manager = SessionManager()
 
-        server = await manager.create_session(
+        state = await manager.create_session(
             session_id="test-789",
             goal="Quick task",
             budget=20.0,
             max_turns=10,
         )
 
-        assert server.state.max_turns == 10
+        assert state.max_turns == 10
 
     @pytest.mark.asyncio
     async def test_create_session_duplicate_raises_error(self):
@@ -121,7 +136,7 @@ class TestSessionRetrieval:
         retrieved = await manager.get_session("exists")
 
         assert retrieved is original
-        assert retrieved.state.session_id == "exists"
+        assert retrieved.session_id == "exists"
 
     @pytest.mark.asyncio
     async def test_get_session_nonexistent(self):
@@ -171,7 +186,7 @@ class TestSessionCleanup:
         result = await manager.cleanup_session("to-remove")
 
         assert result is True
-        assert "to-remove" not in manager.sessions
+        assert not is_session_registered("to-remove")
         assert "to-remove" not in manager.session_times
 
     @pytest.mark.asyncio
@@ -199,7 +214,6 @@ class TestSessionCleanup:
         count = await manager.cleanup_all()
 
         assert count == 5
-        assert len(manager.sessions) == 0
         assert len(manager.session_times) == 0
 
     @pytest.mark.asyncio
@@ -208,32 +222,32 @@ class TestSessionCleanup:
         manager = SessionManager()
 
         # Create sessions
-        server1 = await manager.create_session(
+        state1 = await manager.create_session(
             session_id="completed-1",
             goal="Task",
             budget=50.0,
         )
-        server2 = await manager.create_session(
+        state2 = await manager.create_session(
             session_id="active-1",
             goal="Task",
             budget=50.0,
         )
-        server3 = await manager.create_session(
+        state3 = await manager.create_session(
             session_id="completed-2",
             goal="Task",
             budget=50.0,
         )
 
         # Mark some as completed
-        server1.state.completed = True
-        server3.state.completed = True
+        state1.completed = True
+        state3.completed = True
 
         count = await manager.cleanup_completed()
 
         assert count == 2
-        assert "completed-1" not in manager.sessions
-        assert "completed-2" not in manager.sessions
-        assert "active-1" in manager.sessions
+        assert not is_session_registered("completed-1")
+        assert not is_session_registered("completed-2")
+        assert is_session_registered("active-1")
 
 
 class TestTTLExpiration:
@@ -262,8 +276,8 @@ class TestTTLExpiration:
             budget=50.0,
         )
 
-        assert "old" not in manager.sessions
-        assert "new" in manager.sessions
+        assert not is_session_registered("old")
+        assert is_session_registered("new")
 
     @pytest.mark.asyncio
     async def test_is_session_active_not_expired(self):
@@ -331,11 +345,11 @@ class TestCapacityLRUEviction:
             budget=50.0,
         )
 
-        assert len(manager.sessions) == 3
-        assert "session-1" not in manager.sessions  # Oldest was evicted
-        assert "session-0" in manager.sessions  # Was accessed recently
-        assert "session-2" in manager.sessions
-        assert "session-3" in manager.sessions
+        assert len(manager.session_times) == 3
+        assert not is_session_registered("session-1")  # Oldest was evicted
+        assert is_session_registered("session-0")  # Was accessed recently
+        assert is_session_registered("session-2")
+        assert is_session_registered("session-3")
 
     @pytest.mark.asyncio
     async def test_multiple_evictions(self):
@@ -363,9 +377,9 @@ class TestCapacityLRUEviction:
             budget=50.0,
         )
 
-        assert "a" not in manager.sessions
-        assert "b" in manager.sessions
-        assert "c" in manager.sessions
+        assert not is_session_registered("a")
+        assert is_session_registered("b")
+        assert is_session_registered("c")
 
 
 class TestSessionInfo:
@@ -404,7 +418,7 @@ class TestSessionInfo:
         assert set(ids) == {"session-0", "session-1", "session-2"}
 
     @pytest.mark.asyncio
-    async def test_get_session_state(self):
+    async def test_get_session_state_summary(self):
         """Test getting session state summary."""
         manager = SessionManager()
 
@@ -415,7 +429,7 @@ class TestSessionInfo:
             constraints=["no synthetic"],
         )
 
-        state = await manager.get_session_state("stateful")
+        state = await manager.get_session_state_summary("stateful")
 
         assert state is not None
         assert state["session_id"] == "stateful"
@@ -424,11 +438,11 @@ class TestSessionInfo:
         assert state["constraints"] == ["no synthetic"]
 
     @pytest.mark.asyncio
-    async def test_get_session_state_nonexistent(self):
+    async def test_get_session_state_summary_nonexistent(self):
         """Test getting state of nonexistent session."""
         manager = SessionManager()
 
-        state = await manager.get_session_state("nonexistent")
+        state = await manager.get_session_state_summary("nonexistent")
 
         assert state is None
 
@@ -506,7 +520,7 @@ class TestEdgeCases:
         )
 
         assert await manager.get_session_count() == 1
-        assert "second" in manager.sessions
+        assert is_session_registered("second")
 
     @pytest.mark.asyncio
     async def test_very_short_ttl(self):
@@ -527,23 +541,23 @@ class TestEdgeCases:
         """Test session with empty goal string."""
         manager = SessionManager()
 
-        server = await manager.create_session(
+        state = await manager.create_session(
             session_id="empty-goal",
             goal="",
             budget=50.0,
         )
 
-        assert server.state.goal == ""
+        assert state.goal == ""
 
     @pytest.mark.asyncio
     async def test_zero_budget(self):
         """Test session with zero budget."""
         manager = SessionManager()
 
-        server = await manager.create_session(
+        state = await manager.create_session(
             session_id="zero-budget",
             goal="Free items only",
             budget=0.0,
         )
 
-        assert server.state.budget == 0.0
+        assert state.budget == 0.0

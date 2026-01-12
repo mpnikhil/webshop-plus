@@ -15,7 +15,7 @@ import re
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Optional
 
 import structlog
 from a2a.server.tasks import TaskUpdater

@@ -71,7 +71,7 @@ def create_agent_card(card_url: str) -> AgentCard:
         defaultInputModes=["text/plain"],
         defaultOutputModes=["text/plain"],
         capabilities=AgentCapabilities(
-            streaming=False,
+            streaming=True,  # Required for task status updates
             pushNotifications=False,
             stateTransitionHistory=False,
         ),

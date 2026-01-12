@@ -43,6 +43,9 @@ from .webshop_wrapper import WebShopWrapper
 if TYPE_CHECKING:
     from .webshop_mcp import SessionManager
 
+# Runtime imports for MCP session functions
+from .webshop_mcp import is_session_completed, get_final_result
+
 logger = structlog.get_logger()
 
 
@@ -611,9 +614,8 @@ class WebShopPlusAgent:
 
             # Get final result from MCP session if available
             if mcp_session_id and self._session_manager:
-                mcp_server = await self._session_manager.get_session(mcp_session_id)
-                if mcp_server and mcp_server.is_completed():
-                    mcp_result = mcp_server.get_final_result()
+                if is_session_completed(mcp_session_id):
+                    mcp_result = get_final_result(mcp_session_id)
                     if mcp_result:
                         # Merge MCP result into task execution result
                         if "turns_used" in mcp_result:

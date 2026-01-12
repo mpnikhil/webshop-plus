@@ -11,8 +11,10 @@ import json
 from dataclasses import dataclass
 from typing import Any, Optional
 
+import httpx
 import structlog
 from a2a.client import Client
+from a2a.client.client import ClientConfig
 from a2a.client.client_factory import ClientFactory
 from a2a.client.helpers import create_text_message_object
 from a2a.types import (
@@ -100,10 +102,16 @@ class PurpleAgentClient:
         """Initialize the PurpleAgentClient.
 
         Args:
-            agent_url: The purple agent's base URL (e.g., "http://localhost:8001").
+            agent_url: The purple agent's URL (e.g., "http://localhost:8001" or
+                      "http://localhost:8001/a2a"). The /a2a suffix is stripped
+                      since the SDK expects the base URL for agent card fetching.
             timeout: Request timeout in seconds.
         """
-        self.agent_url = agent_url.rstrip("/")
+        # Strip /a2a suffix if present - SDK expects base URL for agent card
+        url = agent_url.rstrip("/")
+        if url.endswith("/a2a"):
+            url = url[:-4]
+        self.agent_url = url
         self.timeout = timeout
         self._client: Optional[Client] = None
         self._agent_card: Optional[AgentCard] = None
@@ -121,13 +129,22 @@ class PurpleAgentClient:
         """Connect to the purple agent.
 
         Fetches the agent card and creates the SDK client.
+        Uses a custom httpx client with the configured timeout.
 
         Raises:
             ConnectionError: If connection fails.
         """
         try:
-            logger.info("Connecting to purple agent", url=self.agent_url)
-            self._client = await ClientFactory.connect(self.agent_url)
+            logger.info("Connecting to purple agent", url=self.agent_url, timeout=self.timeout)
+
+            # Create custom httpx client with configured timeout
+            httpx_client = httpx.AsyncClient(timeout=httpx.Timeout(self.timeout))
+            client_config = ClientConfig(httpx_client=httpx_client)
+
+            self._client = await ClientFactory.connect(
+                self.agent_url,
+                client_config=client_config,
+            )
             self._agent_card = await self._client.get_card()
             logger.info(
                 "Connected to purple agent",

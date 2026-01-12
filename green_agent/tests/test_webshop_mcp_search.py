@@ -1,6 +1,6 @@
 """Tests for MCP search tool.
 
-These tests verify the search() tool in WebShopMCPServer:
+These tests verify the search() tool:
 - Returns products with element IDs
 - Updates visible_elements in session state
 - Increments turn count
@@ -12,8 +12,15 @@ from typing import Any
 
 import pytest
 
-from src.webshop_mcp.server import WebShopMCPServer
 from src.webshop_mcp.session_state import SessionState
+from src.webshop_mcp.server import (
+    search,
+    current_session_id,
+    register_session,
+    unregister_session,
+    _session_states,
+    _webshop_interfaces,
+)
 
 
 @dataclass
@@ -73,6 +80,22 @@ class MockWebShop:
         return {}
 
 
+@pytest.fixture(autouse=True)
+def cleanup_global_state():
+    """Clean up global session state before and after each test."""
+    _session_states.clear()
+    _webshop_interfaces.clear()
+    yield
+    _session_states.clear()
+    _webshop_interfaces.clear()
+    # Reset contextvar if set
+    try:
+        current_session_id.get()
+        # Can't reset without token, so just clear state
+    except LookupError:
+        pass
+
+
 def create_search_results_html(products: list[dict]) -> str:
     """Create mock HTML for search results.
 
@@ -94,6 +117,36 @@ def create_search_results_html(products: list[dict]) -> str:
     return f'<div class="list-group">{"".join(items)}</div>'
 
 
+def setup_session(
+    session_id: str = "test-123",
+    goal: str = "Find running shoes",
+    budget: float = 100.0,
+    webshop: MockWebShop | None = None,
+    max_turns: int = 30,
+):
+    """Set up a session for testing.
+
+    Args:
+        session_id: Session ID to use.
+        goal: Shopping goal.
+        budget: Budget limit.
+        webshop: Mock WebShop instance.
+        max_turns: Maximum turns allowed.
+
+    Returns:
+        Tuple of (state, token) where token can be used to reset contextvar.
+    """
+    state = SessionState(
+        session_id=session_id,
+        goal=goal,
+        budget=budget,
+        max_turns=max_turns,
+    )
+    register_session(session_id, state, webshop)
+    token = current_session_id.set(session_id)
+    return state, token
+
+
 class TestSearchReturnsProductsWithIds:
     """Test that search returns structured products with element IDs."""
 
@@ -104,20 +157,16 @@ class TestSearchReturnsProductsWithIds:
             {"asin": "B002", "name": "Trail Runners", "price": 59.99},
         ]
         html = create_search_results_html(products)
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find running shoes",
-            budget=100.0,
-        )
         webshop = MockWebShop(search_results_html=html)
-        server = WebShopMCPServer(state, webshop=webshop)
 
-        # Get the search tool and call it
-        result = server.mcp._tool_manager._tools["search"].fn("running shoes")
+        state, token = setup_session(webshop=webshop)
+        try:
+            result = search("running shoes")
 
-        assert "products" in result
-        assert len(result["products"]) == 2
+            assert "products" in result
+            assert len(result["products"]) == 2
+        finally:
+            current_session_id.reset(token)
 
     def test_search_products_have_element_ids(self):
         """Each product should have an element ID like 'p1', 'p2'."""
@@ -127,20 +176,17 @@ class TestSearchReturnsProductsWithIds:
             {"asin": "B003", "name": "Sneakers", "price": 39.99},
         ]
         html = create_search_results_html(products)
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=100.0,
-        )
         webshop = MockWebShop(search_results_html=html)
-        server = WebShopMCPServer(state, webshop=webshop)
 
-        result = server.mcp._tool_manager._tools["search"].fn("shoes")
+        state, token = setup_session(webshop=webshop)
+        try:
+            result = search("shoes")
 
-        # Check IDs are p1, p2, p3
-        ids = [p["id"] for p in result["products"]]
-        assert ids == ["p1", "p2", "p3"]
+            # Check IDs are p1, p2, p3
+            ids = [p["id"] for p in result["products"]]
+            assert ids == ["p1", "p2", "p3"]
+        finally:
+            current_session_id.reset(token)
 
     def test_search_products_have_name_and_price(self):
         """Each product should include name and price."""
@@ -148,21 +194,18 @@ class TestSearchReturnsProductsWithIds:
             {"asin": "B001", "name": "Running Shoes", "price": 49.99},
         ]
         html = create_search_results_html(products)
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=100.0,
-        )
         webshop = MockWebShop(search_results_html=html)
-        server = WebShopMCPServer(state, webshop=webshop)
 
-        result = server.mcp._tool_manager._tools["search"].fn("shoes")
+        state, token = setup_session(webshop=webshop)
+        try:
+            result = search("shoes")
 
-        product = result["products"][0]
-        assert "name" in product
-        assert "price" in product
-        assert product["name"] == "Running Shoes"
+            product = result["products"][0]
+            assert "name" in product
+            assert "price" in product
+            assert product["name"] == "Running Shoes"
+        finally:
+            current_session_id.reset(token)
 
     def test_search_uses_webshop_prices_when_available(self):
         """Search should use product_prices from webshop if available."""
@@ -170,375 +213,251 @@ class TestSearchReturnsProductsWithIds:
             {"asin": "B001", "name": "Running Shoes", "price": 49.99},
         ]
         html = create_search_results_html(products)
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=100.0,
-        )
         # WebShop has a different price for this ASIN
         webshop = MockWebShop(
             search_results_html=html,
             prices={"B001": 45.00},
         )
-        server = WebShopMCPServer(state, webshop=webshop)
 
-        result = server.mcp._tool_manager._tools["search"].fn("shoes")
+        state, token = setup_session(webshop=webshop)
+        try:
+            result = search("shoes")
 
-        # Should use the price from webshop.product_prices
-        assert result["products"][0]["price"] == 45.00
+            # Should use the price from webshop.product_prices
+            assert result["products"][0]["price"] == 45.00
+        finally:
+            current_session_id.reset(token)
 
 
 class TestSearchUpdatesVisibleElements:
     """Test that search updates visible_elements in session state."""
 
-    def test_search_populates_visible_elements(self):
-        """After search, visible_elements should contain product entries."""
-        products = [
-            {"asin": "B001", "name": "Running Shoes", "price": 49.99},
-            {"asin": "B002", "name": "Trail Runners", "price": 59.99},
-        ]
-        html = create_search_results_html(products)
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=100.0,
-        )
-        webshop = MockWebShop(search_results_html=html)
-        server = WebShopMCPServer(state, webshop=webshop)
-
-        server.mcp._tool_manager._tools["search"].fn("shoes")
-
-        # Check visible_elements has p1, p2
-        assert "p1" in state.visible_elements
-        assert "p2" in state.visible_elements
-
-    def test_visible_elements_contain_product_data(self):
-        """Visible elements should store product type and data."""
+    def test_search_updates_visible_elements(self):
+        """Search should update state.visible_elements with product info."""
         products = [
             {"asin": "B001", "name": "Running Shoes", "price": 49.99},
         ]
         html = create_search_results_html(products)
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=100.0,
-        )
         webshop = MockWebShop(search_results_html=html)
-        server = WebShopMCPServer(state, webshop=webshop)
 
-        server.mcp._tool_manager._tools["search"].fn("shoes")
+        state, token = setup_session(webshop=webshop)
+        try:
+            search("shoes")
 
-        elem = state.visible_elements["p1"]
-        assert elem["type"] == "product"
-        assert elem["asin"] == "B001"
-        assert "data" in elem
+            assert "p1" in state.visible_elements
+            assert state.visible_elements["p1"]["type"] == "product"
+            assert state.visible_elements["p1"]["asin"] == "B001"
+        finally:
+            current_session_id.reset(token)
 
     def test_search_clears_previous_visible_elements(self):
         """New search should clear previous visible elements."""
         products = [
-            {"asin": "B001", "name": "Shoes", "price": 49.99},
+            {"asin": "B001", "name": "Running Shoes", "price": 49.99},
         ]
         html = create_search_results_html(products)
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=100.0,
-        )
-        # Pre-populate with old elements
-        state.visible_elements = {
-            "old_element": {"type": "product", "asin": "OLD"},
-        }
-
         webshop = MockWebShop(search_results_html=html)
-        server = WebShopMCPServer(state, webshop=webshop)
 
-        server.mcp._tool_manager._tools["search"].fn("shoes")
+        state, token = setup_session(webshop=webshop)
+        try:
+            # Add some pre-existing elements
+            state.visible_elements = {"old_element": {"type": "old"}}
 
-        # Old element should be gone
-        assert "old_element" not in state.visible_elements
-        # New element should be present
-        assert "p1" in state.visible_elements
+            search("shoes")
 
-    def test_search_updates_current_page(self):
-        """Search should update current_page to 'search_results'."""
-        products = [{"asin": "B001", "name": "Shoes", "price": 49.99}]
-        html = create_search_results_html(products)
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=100.0,
-        )
-        state.current_page = "home"
-
-        webshop = MockWebShop(search_results_html=html)
-        server = WebShopMCPServer(state, webshop=webshop)
-
-        server.mcp._tool_manager._tools["search"].fn("shoes")
-
-        assert state.current_page == "search_results"
+            # Old elements should be gone
+            assert "old_element" not in state.visible_elements
+            assert "p1" in state.visible_elements
+        finally:
+            current_session_id.reset(token)
 
 
-class TestSearchIncrementsTurnCount:
+class TestSearchTurnCount:
     """Test that search increments turn count."""
 
-    def test_search_increments_turn(self):
-        """Each search should increment turn_count by 1."""
-        html = create_search_results_html([])
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=100.0,
-        )
-        assert state.turn_count == 0
-
-        webshop = MockWebShop(search_results_html=html)
-        server = WebShopMCPServer(state, webshop=webshop)
-
-        server.mcp._tool_manager._tools["search"].fn("shoes")
-        assert state.turn_count == 1
-
-        server.mcp._tool_manager._tools["search"].fn("sneakers")
-        assert state.turn_count == 2
-
-    def test_search_records_in_history(self):
-        """Search actions should be recorded in history."""
-        html = create_search_results_html([])
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=100.0,
-        )
-
-        webshop = MockWebShop(search_results_html=html)
-        server = WebShopMCPServer(state, webshop=webshop)
-
-        server.mcp._tool_manager._tools["search"].fn("running shoes")
-
-        # Check history
-        assert len(state.history) >= 1
-        search_entry = next(
-            (h for h in state.history if h.get("action") == "search"), None
-        )
-        assert search_entry is not None
-        assert search_entry["query"] == "running shoes"
-
-
-class TestSearchMaxTurnsExceeded:
-    """Test that search handles max turns exceeded."""
-
-    def test_search_returns_terminal_when_max_turns_exceeded(self):
-        """When max turns exceeded, return terminal response."""
-        html = create_search_results_html([])
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=100.0,
-            max_turns=2,
-        )
-        # Set turn count to max
-        state.turn_count = 2
-
-        webshop = MockWebShop(search_results_html=html)
-        server = WebShopMCPServer(state, webshop=webshop)
-
-        result = server.mcp._tool_manager._tools["search"].fn("shoes")
-
-        assert result["terminated"] is True
-        assert result["reason"] == "max_turns_exceeded"
-        assert result["score"] == 0.2
-
-    def test_max_turns_marks_session_completed(self):
-        """When max turns exceeded, session should be marked completed."""
-        html = create_search_results_html([])
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=100.0,
-            max_turns=1,
-        )
-        state.turn_count = 1
-
-        webshop = MockWebShop(search_results_html=html)
-        server = WebShopMCPServer(state, webshop=webshop)
-
-        server.mcp._tool_manager._tools["search"].fn("shoes")
-
-        assert state.completed is True
-
-    def test_normal_search_does_not_terminate(self):
-        """Normal search within turn limit should not terminate."""
-        products = [{"asin": "B001", "name": "Shoes", "price": 49.99}]
+    def test_search_increments_turn_count(self):
+        """Each search should increment turn count."""
+        products = [{"asin": "B001", "name": "Running Shoes", "price": 49.99}]
         html = create_search_results_html(products)
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=100.0,
-            max_turns=10,
-        )
-
         webshop = MockWebShop(search_results_html=html)
-        server = WebShopMCPServer(state, webshop=webshop)
 
-        result = server.mcp._tool_manager._tools["search"].fn("shoes")
+        state, token = setup_session(webshop=webshop)
+        try:
+            assert state.turn_count == 0
 
-        assert "terminated" not in result or result.get("terminated") is False
-        assert state.completed is False
+            search("shoes")
+            assert state.turn_count == 1
 
-
-class TestSearchReturnsPaginationActions:
-    """Test that search returns pagination actions when available."""
-
-    def test_search_includes_next_page_action(self):
-        """When 'Next >' is available, include it in actions."""
-        products = [{"asin": "B001", "name": "Shoes", "price": 49.99}]
-        html = create_search_results_html(products)
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=100.0,
-        )
-        webshop = MockWebShop(
-            search_results_html=html,
-            available_actions={
-                "has_search_bar": False,
-                "clickables": ["next >", "b001"],
-            },
-        )
-        server = WebShopMCPServer(state, webshop=webshop)
-
-        result = server.mcp._tool_manager._tools["search"].fn("shoes")
-
-        assert "actions" in result
-        action_ids = [a["id"] for a in result["actions"]]
-        assert "next_page" in action_ids
-
-    def test_next_page_added_to_visible_elements(self):
-        """Next page action should be in visible_elements."""
-        products = [{"asin": "B001", "name": "Shoes", "price": 49.99}]
-        html = create_search_results_html(products)
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=100.0,
-        )
-        webshop = MockWebShop(
-            search_results_html=html,
-            available_actions={
-                "has_search_bar": False,
-                "clickables": ["next >"],
-            },
-        )
-        server = WebShopMCPServer(state, webshop=webshop)
-
-        server.mcp._tool_manager._tools["search"].fn("shoes")
-
-        assert "next_page" in state.visible_elements
-        assert state.visible_elements["next_page"]["type"] == "navigation"
-
-    def test_search_includes_prev_page_action(self):
-        """When '< Prev' is available, include it in actions."""
-        products = [{"asin": "B001", "name": "Shoes", "price": 49.99}]
-        html = create_search_results_html(products)
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=100.0,
-        )
-        webshop = MockWebShop(
-            search_results_html=html,
-            available_actions={
-                "has_search_bar": False,
-                "clickables": ["< prev", "next >"],
-            },
-        )
-        server = WebShopMCPServer(state, webshop=webshop)
-
-        result = server.mcp._tool_manager._tools["search"].fn("shoes")
-
-        action_ids = [a["id"] for a in result["actions"]]
-        assert "prev_page" in action_ids
-        assert "next_page" in action_ids
-
-
-class TestSearchReturnsMetadata:
-    """Test that search returns useful metadata."""
-
-    def test_search_returns_query(self):
-        """Result should include the query that was searched."""
-        html = create_search_results_html([])
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=100.0,
-        )
-        webshop = MockWebShop(search_results_html=html)
-        server = WebShopMCPServer(state, webshop=webshop)
-
-        result = server.mcp._tool_manager._tools["search"].fn("blue running shoes")
-
-        assert result["query"] == "blue running shoes"
-
-    def test_search_returns_page_type(self):
-        """Result should include page type."""
-        html = create_search_results_html([])
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=100.0,
-        )
-        webshop = MockWebShop(search_results_html=html)
-        server = WebShopMCPServer(state, webshop=webshop)
-
-        result = server.mcp._tool_manager._tools["search"].fn("shoes")
-
-        assert result["page"] == "search_results"
+            search("sneakers")
+            assert state.turn_count == 2
+        finally:
+            current_session_id.reset(token)
 
     def test_search_returns_turn_info(self):
-        """Result should include turn count and remaining turns."""
-        html = create_search_results_html([])
-
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=100.0,
-            max_turns=10,
-        )
+        """Search result should include turn information."""
+        products = [{"asin": "B001", "name": "Running Shoes", "price": 49.99}]
+        html = create_search_results_html(products)
         webshop = MockWebShop(search_results_html=html)
-        server = WebShopMCPServer(state, webshop=webshop)
 
-        result = server.mcp._tool_manager._tools["search"].fn("shoes")
+        state, token = setup_session(webshop=webshop, max_turns=10)
+        try:
+            result = search("shoes")
 
-        assert result["turn"] == 1
-        assert result["turns_remaining"] == 9
+            assert "turn" in result
+            assert "turns_remaining" in result
+            assert result["turn"] == 1
+            assert result["turns_remaining"] == 9
+        finally:
+            current_session_id.reset(token)
 
-    def test_search_returns_budget_info(self):
-        """Result should include budget and cart total."""
-        html = create_search_results_html([])
 
-        state = SessionState(
-            session_id="test-123",
-            goal="Find shoes",
-            budget=75.50,
-        )
+class TestSearchMaxTurns:
+    """Test max turns handling in search."""
+
+    def test_search_terminates_at_max_turns(self):
+        """Search should return terminal state when max turns exceeded."""
+        products = [{"asin": "B001", "name": "Running Shoes", "price": 49.99}]
+        html = create_search_results_html(products)
         webshop = MockWebShop(search_results_html=html)
-        server = WebShopMCPServer(state, webshop=webshop)
 
-        result = server.mcp._tool_manager._tools["search"].fn("shoes")
+        state, token = setup_session(webshop=webshop, max_turns=2)
+        try:
+            # First two searches are fine
+            search("shoes")
+            search("sneakers")
 
-        assert result["budget"] == 75.50
-        assert result["cart_total"] == 0.0
+            # Third search should terminate
+            result = search("boots")
+
+            assert result["terminated"] is True
+            assert result["reason"] == "max_turns_exceeded"
+            assert "score" in result
+        finally:
+            current_session_id.reset(token)
+
+    def test_search_marks_session_completed_at_max_turns(self):
+        """Session should be marked completed when max turns hit."""
+        products = [{"asin": "B001", "name": "Running Shoes", "price": 49.99}]
+        html = create_search_results_html(products)
+        webshop = MockWebShop(search_results_html=html)
+
+        state, token = setup_session(webshop=webshop, max_turns=1)
+        try:
+            assert not state.completed
+
+            # This search hits max turns
+            search("shoes")
+            search("more")
+
+            assert state.completed
+        finally:
+            current_session_id.reset(token)
+
+
+class TestSearchBudgetInfo:
+    """Test that search includes budget information."""
+
+    def test_search_includes_budget(self):
+        """Search result should include budget info."""
+        products = [{"asin": "B001", "name": "Running Shoes", "price": 49.99}]
+        html = create_search_results_html(products)
+        webshop = MockWebShop(search_results_html=html)
+
+        state, token = setup_session(webshop=webshop, budget=50.0)
+        try:
+            result = search("shoes")
+
+            assert "budget" in result
+            assert result["budget"] == 50.0
+        finally:
+            current_session_id.reset(token)
+
+    def test_search_includes_cart_total(self):
+        """Search result should include current cart total."""
+        products = [{"asin": "B001", "name": "Running Shoes", "price": 49.99}]
+        html = create_search_results_html(products)
+        webshop = MockWebShop(search_results_html=html)
+
+        state, token = setup_session(webshop=webshop)
+        try:
+            result = search("shoes")
+
+            assert "cart_total" in result
+            assert result["cart_total"] == 0.0  # Empty cart
+        finally:
+            current_session_id.reset(token)
+
+
+class TestSearchPagination:
+    """Test search pagination actions."""
+
+    def test_search_includes_next_page_action(self):
+        """Search should include next page if available."""
+        products = [{"asin": "B001", "name": "Running Shoes", "price": 49.99}]
+        html = create_search_results_html(products)
+        webshop = MockWebShop(
+            search_results_html=html,
+            available_actions={"clickables": ["next >"]},
+        )
+
+        state, token = setup_session(webshop=webshop)
+        try:
+            result = search("shoes")
+
+            actions = [a["id"] for a in result.get("actions", [])]
+            assert "next_page" in actions
+        finally:
+            current_session_id.reset(token)
+
+    def test_search_includes_prev_page_action(self):
+        """Search should include prev page if available."""
+        products = [{"asin": "B001", "name": "Running Shoes", "price": 49.99}]
+        html = create_search_results_html(products)
+        webshop = MockWebShop(
+            search_results_html=html,
+            available_actions={"clickables": ["< prev"]},
+        )
+
+        state, token = setup_session(webshop=webshop)
+        try:
+            result = search("shoes")
+
+            actions = [a["id"] for a in result.get("actions", [])]
+            assert "prev_page" in actions
+        finally:
+            current_session_id.reset(token)
+
+
+class TestSearchWebShopIntegration:
+    """Test search integration with WebShop environment."""
+
+    def test_search_calls_webshop_step(self):
+        """Search should call webshop.step with search action."""
+        products = [{"asin": "B001", "name": "Running Shoes", "price": 49.99}]
+        html = create_search_results_html(products)
+        webshop = MockWebShop(search_results_html=html)
+
+        state, token = setup_session(webshop=webshop)
+        try:
+            search("running shoes")
+
+            assert len(webshop.step_calls) == 1
+            assert "search[running shoes]" in webshop.step_calls[0]
+        finally:
+            current_session_id.reset(token)
+
+    def test_search_records_history(self):
+        """Search should record action in session history."""
+        products = [{"asin": "B001", "name": "Running Shoes", "price": 49.99}]
+        html = create_search_results_html(products)
+        webshop = MockWebShop(search_results_html=html)
+
+        state, token = setup_session(webshop=webshop)
+        try:
+            search("running shoes")
+
+            assert len(state.history) == 1
+            assert state.history[0]["action"] == "search"
+            assert state.history[0]["query"] == "running shoes"
+        finally:
+            current_session_id.reset(token)

@@ -45,6 +45,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH=/app
 ENV PORT=8000
 ENV HOST=0.0.0.0
+ENV ADVERTISE_HOST=green
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
@@ -55,4 +56,5 @@ EXPOSE ${PORT}
 
 # Run the server
 # Use exec form for proper signal handling
-CMD [".venv/bin/python", "src/server.py", "--host", "0.0.0.0", "--port", "8000"]
+# advertise-host=green tells purple agent to connect via Docker service name
+CMD [".venv/bin/python", "src/server.py", "--host", "0.0.0.0", "--port", "8000", "--advertise-host", "green"]

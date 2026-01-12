@@ -2,21 +2,16 @@
   {
     "task_id": "budget_001",
     "task_type": "budget_constrained",
-    "instruction": "I need a good quality wireless mouse and a mousepad for my home office. I have about $50 to spend and want to get the best value for my money.",
+    "instruction": "I am looking for a pair of men's black loafers, preferably casual slip-on style. My budget is $50 and I want good value for money.",
     "difficulty": "easy",
-    "expected_actions": 12,
+    "expected_actions": 8,
     "timeout_seconds": 180,
     "constraints": {
       "budget": 50.00,
       "required_items": [
         {
-          "category": "electronics",
-          "attributes": {"type": "wireless mouse"},
-          "optional": false
-        },
-        {
-          "category": "office",
-          "attributes": {"type": "mousepad"},
+          "category": "fashion",
+          "attributes": {"type": "loafers", "color": "black"},
           "optional": false
         }
       ],

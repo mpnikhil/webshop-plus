@@ -27,7 +27,7 @@ from a2a.types import (
 )
 
 from .agent import AgentConfig, WebShopPlusAgent
-from .webshop_mcp import SessionManager
+from .webshop_mcp import SessionManager, is_session_completed, get_final_result
 from .models import AssessmentConfig, TaskUpdate
 
 logger = structlog.get_logger()
@@ -75,6 +75,9 @@ def _parse_config(metadata: dict[str, Any]) -> AssessmentConfig:
     config_data = metadata.get("config", {})
 
     # Map A2A inputSchema field names to internal model names
+    # Note: categories values should use exact TaskType enum names:
+    # budget_constrained, preference_memory, negative_constraint,
+    # comparative_reasoning, error_recovery
     field_mapping = {
         "num_tasks": "num_tasks",
         "categories": "task_types",
@@ -290,7 +293,10 @@ class WebShopPlusExecutor(AgentExecutor):
             )
 
             # Run assessment with progress updates
-            async with WebShopPlusAgent(config=self._agent_config) as agent:
+            async with WebShopPlusAgent(
+                config=self._agent_config,
+                session_manager=self._session_manager,
+            ) as agent:
                 # Store agent for potential cancellation
                 self._active_agents[task_id] = agent
 
@@ -589,14 +595,17 @@ class WebShopPlusExecutor(AgentExecutor):
         if self._session_manager is None:
             return None
 
-        server = await self._session_manager.get_session(session_id)
-        if server is None:
+        # Check if session exists
+        state = await self._session_manager.get_session(session_id)
+        if state is None:
             return None
 
-        if not server.is_completed():
+        # Check if session is completed using module-level function
+        if not is_session_completed(session_id):
             return None
 
-        return server.get_final_result()
+        # Get the final result using module-level function
+        return get_final_result(session_id)
 
     def has_mcp_support(self) -> bool:
         """Check if MCP support is enabled.

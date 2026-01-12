@@ -1,22 +1,38 @@
-"""Session manager for MCP server instances.
+"""Session manager for MCP server sessions.
 
 This module provides the SessionManager class that manages the lifecycle of
-session-scoped MCP server instances. It handles session creation, retrieval,
+session state for the global MCP server. It handles session creation, retrieval,
 expiration (TTL), and capacity limits (LRU eviction).
+
+Note: This manager no longer creates per-session MCP servers. Instead, it
+manages SessionState objects that are used by the single global FastMCP server
+via contextvars for session isolation.
 """
 
 import asyncio
 import time
 from typing import Any
 
-from .server import WebShopMCPServer
+import structlog
+
+from .server import (
+    get_final_result,
+    is_session_completed,
+    is_session_registered,
+    register_session,
+    unregister_session,
+    wait_for_completion,
+    get_session_state,
+)
 from .session_state import SessionState
+
+logger = structlog.get_logger()
 
 
 class SessionManager:
-    """Manages MCP server instances for active sessions.
+    """Manages session state for the global MCP server.
 
-    This class provides lifecycle management for session-scoped MCP servers:
+    This class provides lifecycle management for session-scoped state:
     - Create new sessions with unique IDs
     - Retrieve existing sessions by ID
     - Automatic cleanup of expired sessions (TTL-based)
@@ -26,7 +42,7 @@ class SessionManager:
         manager = SessionManager(max_sessions=100, session_ttl=3600)
 
         # Create a new session
-        server = await manager.create_session(
+        state = await manager.create_session(
             session_id="abc123",
             goal="Find running shoes under $50",
             budget=50.0,
@@ -34,13 +50,12 @@ class SessionManager:
         )
 
         # Retrieve session later
-        server = await manager.get_session("abc123")
+        state = await manager.get_session("abc123")
 
         # Cleanup when done
         await manager.cleanup_session("abc123")
 
     Attributes:
-        sessions: Dict mapping session IDs to WebShopMCPServer instances.
         session_times: Dict mapping session IDs to creation timestamps.
         max_sessions: Maximum number of concurrent sessions allowed.
         session_ttl: Time-to-live in seconds before session expires.
@@ -59,7 +74,6 @@ class SessionManager:
             session_ttl: Time-to-live in seconds for sessions. Sessions older
                 than this are automatically cleaned up. Default: 3600 (1 hour).
         """
-        self.sessions: dict[str, WebShopMCPServer] = {}
         self.session_times: dict[str, float] = {}
         self.max_sessions = max_sessions
         self.session_ttl = session_ttl
@@ -73,8 +87,8 @@ class SessionManager:
         constraints: list[str] | None = None,
         max_turns: int = 30,
         webshop: Any | None = None,
-    ) -> WebShopMCPServer:
-        """Create a new session with an MCP server.
+    ) -> SessionState:
+        """Create a new session with state registered to the global MCP server.
 
         Args:
             session_id: Unique identifier for this session.
@@ -85,14 +99,14 @@ class SessionManager:
             webshop: Optional WebShop interface (for testing).
 
         Returns:
-            WebShopMCPServer instance for this session.
+            SessionState instance for this session.
 
         Raises:
             ValueError: If session_id already exists.
         """
         async with self._lock:
             # Check if session already exists
-            if session_id in self.sessions:
+            if is_session_registered(session_id):
                 raise ValueError(f"Session '{session_id}' already exists")
 
             # Cleanup expired and excess sessions
@@ -107,29 +121,43 @@ class SessionManager:
                 max_turns=max_turns,
             )
 
-            # Create MCP server for this session
-            server = WebShopMCPServer(state, webshop=webshop)
+            # Register with global MCP server
+            register_session(session_id, state, webshop)
 
-            # Store session
-            self.sessions[session_id] = server
+            # Track session time for LRU
             self.session_times[session_id] = time.time()
 
-            return server
+            logger.info(
+                "SessionManager: session created",
+                session_id=session_id,
+                manager_id=id(self),
+                sessions_count=len(self.session_times),
+            )
 
-    async def get_session(self, session_id: str) -> WebShopMCPServer | None:
-        """Get an existing session by ID.
+            return state
+
+    async def get_session(self, session_id: str) -> SessionState | None:
+        """Get an existing session's state by ID.
 
         Args:
             session_id: The session identifier to look up.
 
         Returns:
-            WebShopMCPServer if session exists, None otherwise.
+            SessionState if session exists, None otherwise.
         """
         async with self._lock:
             # Update access time for LRU tracking
-            if session_id in self.sessions:
+            found = is_session_registered(session_id)
+            logger.info(
+                "SessionManager: get_session",
+                session_id=session_id,
+                found=found,
+                manager_id=id(self),
+                all_sessions=list(self.session_times.keys()),
+            )
+            if found:
                 self.session_times[session_id] = time.time()
-            return self.sessions.get(session_id)
+            return get_session_state(session_id)
 
     async def cleanup_session(self, session_id: str) -> bool:
         """Remove a session and release resources.
@@ -141,9 +169,9 @@ class SessionManager:
             True if session was found and removed, False otherwise.
         """
         async with self._lock:
-            if session_id in self.sessions:
-                del self.sessions[session_id]
-                del self.session_times[session_id]
+            if is_session_registered(session_id):
+                unregister_session(session_id)
+                self.session_times.pop(session_id, None)
                 return True
             return False
 
@@ -153,7 +181,7 @@ class SessionManager:
         Returns:
             Current number of active sessions.
         """
-        return len(self.sessions)
+        return len(self.session_times)
 
     async def get_session_ids(self) -> list[str]:
         """Get list of all active session IDs.
@@ -161,7 +189,7 @@ class SessionManager:
         Returns:
             List of session ID strings.
         """
-        return list(self.sessions.keys())
+        return list(self.session_times.keys())
 
     async def is_session_active(self, session_id: str) -> bool:
         """Check if a session exists and is active.
@@ -172,15 +200,15 @@ class SessionManager:
         Returns:
             True if session exists and not expired, False otherwise.
         """
-        if session_id not in self.sessions:
+        if not is_session_registered(session_id):
             return False
 
         # Check if expired
-        age = time.time() - self.session_times[session_id]
+        age = time.time() - self.session_times.get(session_id, 0)
         return age <= self.session_ttl
 
-    async def get_session_state(self, session_id: str) -> dict[str, Any] | None:
-        """Get the state of a session.
+    async def get_session_state_summary(self, session_id: str) -> dict[str, Any] | None:
+        """Get the state summary of a session.
 
         Args:
             session_id: The session identifier.
@@ -188,10 +216,50 @@ class SessionManager:
         Returns:
             Session state summary dict, or None if session not found.
         """
-        server = await self.get_session(session_id)
-        if server is None:
+        state = get_session_state(session_id)
+        if state is None:
             return None
-        return server.state.get_summary()
+        return state.get_summary()
+
+    async def wait_for_session_completion(
+        self, session_id: str, timeout: float | None = None
+    ) -> dict[str, Any]:
+        """Wait for a session to complete.
+
+        Args:
+            session_id: Session to wait for.
+            timeout: Maximum wait time in seconds.
+
+        Returns:
+            Final evaluation result.
+
+        Raises:
+            asyncio.TimeoutError: If timeout reached.
+            ValueError: If session not found.
+        """
+        return await wait_for_completion(session_id, timeout)
+
+    def is_session_completed(self, session_id: str) -> bool:
+        """Check if session is completed.
+
+        Args:
+            session_id: Session identifier.
+
+        Returns:
+            True if session has completed.
+        """
+        return is_session_completed(session_id)
+
+    def get_final_result(self, session_id: str) -> dict[str, Any] | None:
+        """Get final result for a completed session.
+
+        Args:
+            session_id: Session identifier.
+
+        Returns:
+            Final result if completed, None otherwise.
+        """
+        return get_final_result(session_id)
 
     async def _cleanup_if_needed(self) -> None:
         """Remove expired or excess sessions.
@@ -209,16 +277,16 @@ class SessionManager:
             if now - t > self.session_ttl
         ]
         for sid in expired:
-            del self.sessions[sid]
+            unregister_session(sid)
             del self.session_times[sid]
 
         # LRU eviction if at capacity
-        while len(self.sessions) >= self.max_sessions:
+        while len(self.session_times) >= self.max_sessions:
             # Find oldest session
             if not self.session_times:
                 break
             oldest = min(self.session_times, key=self.session_times.get)  # type: ignore
-            del self.sessions[oldest]
+            unregister_session(oldest)
             del self.session_times[oldest]
 
     async def cleanup_all(self) -> int:
@@ -228,8 +296,9 @@ class SessionManager:
             Number of sessions that were cleaned up.
         """
         async with self._lock:
-            count = len(self.sessions)
-            self.sessions.clear()
+            count = len(self.session_times)
+            for sid in list(self.session_times.keys()):
+                unregister_session(sid)
             self.session_times.clear()
             return count
 
@@ -241,10 +310,10 @@ class SessionManager:
         """
         async with self._lock:
             completed = [
-                sid for sid, server in self.sessions.items()
-                if server.state.completed
+                sid for sid in self.session_times.keys()
+                if is_session_completed(sid)
             ]
             for sid in completed:
-                del self.sessions[sid]
+                unregister_session(sid)
                 del self.session_times[sid]
             return len(completed)

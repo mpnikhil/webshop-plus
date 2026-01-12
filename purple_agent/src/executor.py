@@ -323,6 +323,9 @@ class Executor(AgentExecutor):
         )
 
         # Run the ADK ShoppingAgent
+        result = None
+        shopping_error = None
+
         try:
             result = await self._shopping_agent.run(mcp_uri, task_data)
 
@@ -332,26 +335,34 @@ class Executor(AgentExecutor):
                 turns_used=result.get("turns_used"),
             )
 
-            # Format the response message
-            if result.get("success"):
-                response_text = result.get("final_message", "Shopping task completed successfully.")
-                await updater.complete(
-                    message=self._create_message(response_text)
-                )
-            else:
-                error_msg = result.get("error", "Unknown error")
-                final_msg = result.get("final_message", "")
-                response_text = f"Shopping task failed: {error_msg}"
-                if final_msg:
-                    response_text += f"\nDetails: {final_msg}"
-                await updater.failed(
-                    message=self._create_message(response_text)
-                )
-
         except Exception as e:
             logger.exception("ShoppingAgent raised exception", error=str(e))
+            shopping_error = str(e)
+
+        # Send result even if there was a cleanup error
+        # (MCP client cleanup sometimes raises but task may have completed successfully)
+        if result is not None:
+            # Send result data as JSON for green agent to parse
+            result_json = json.dumps({
+                "success": result.get("success", False),
+                "turns_used": result.get("turns_used", 0),
+                "final_message": result.get("final_message", ""),
+                "error": result.get("error"),
+            })
+
+            # Send the JSON result as the message content
+            if result.get("success"):
+                await updater.complete(
+                    message=self._create_message(result_json)
+                )
+            else:
+                await updater.failed(
+                    message=self._create_message(result_json)
+                )
+        else:
+            # No result due to error before completion
             await updater.failed(
-                message=self._create_message(f"Shopping agent error: {str(e)}")
+                message=self._create_message(f"Shopping agent error: {shopping_error}")
             )
 
     def _create_message(self, text: str) -> Message:

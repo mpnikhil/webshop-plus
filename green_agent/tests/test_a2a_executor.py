@@ -344,6 +344,19 @@ class TestExecutorIntegration:
 class TestExecutorMCPSupport:
     """Tests for MCP session management in WebShopPlusExecutor."""
 
+    @pytest.fixture(autouse=True)
+    def cleanup_global_state(self):
+        """Clean up global session state before and after each test."""
+        from src.webshop_mcp.server import _session_states, _webshop_interfaces, _final_results
+
+        _session_states.clear()
+        _webshop_interfaces.clear()
+        _final_results.clear()
+        yield
+        _session_states.clear()
+        _webshop_interfaces.clear()
+        _final_results.clear()
+
     def test_has_mcp_support_false_by_default(self):
         """Should return False when no SessionManager configured."""
         executor = WebShopPlusExecutor()
@@ -397,13 +410,13 @@ class TestExecutorMCPSupport:
         assert mcp_uri.startswith("http://localhost:8000/mcp/")
         assert session_id in mcp_uri
 
-        # Verify session was created
-        session = await session_manager.get_session(session_id)
-        assert session is not None
-        assert session.state.goal == "Find shoes"
-        assert session.state.budget == 100.0
-        assert session.state.constraints == ["waterproof"]
-        assert session.state.max_turns == 20
+        # Verify session was created (now returns SessionState directly)
+        state = await session_manager.get_session(session_id)
+        assert state is not None
+        assert state.goal == "Find shoes"
+        assert state.budget == 100.0
+        assert state.constraints == ["waterproof"]
+        assert state.max_turns == 20
 
     @pytest.mark.asyncio
     async def test_create_mcp_session_without_manager_raises(self):
@@ -471,7 +484,7 @@ class TestExecutorMCPSupport:
     @pytest.mark.asyncio
     async def test_get_mcp_session_result_completed(self):
         """Should return result for completed session."""
-        from src.webshop_mcp import SessionManager
+        from src.webshop_mcp import SessionManager, signal_completion
 
         session_manager = SessionManager()
         executor = WebShopPlusExecutor(session_manager=session_manager)
@@ -481,11 +494,11 @@ class TestExecutorMCPSupport:
             budget=100.0,
         )
 
-        # Complete the session manually
-        session = await session_manager.get_session(session_id)
-        session.state.mark_completed("checkout")
+        # Complete the session manually using module-level function
+        state = await session_manager.get_session(session_id)
+        state.mark_completed("checkout")
         final_result = {"terminated": True, "reason": "checkout", "score": 1.0}
-        session.signal_completion(final_result)
+        signal_completion(session_id, final_result)
 
         # Now get result
         result = await executor.get_mcp_session_result(session_id)
@@ -494,113 +507,148 @@ class TestExecutorMCPSupport:
         assert result["reason"] == "checkout"
 
 
-class TestMCPServerWaitForCompletion:
-    """Tests for WebShopMCPServer.wait_for_completion()."""
+class TestMCPModuleLevelFunctions:
+    """Tests for module-level MCP completion functions."""
+
+    @pytest.fixture(autouse=True)
+    def cleanup_global_state(self):
+        """Clean up global session state before and after each test."""
+        from src.webshop_mcp.server import (
+            _session_states,
+            _webshop_interfaces,
+            _final_results,
+            _completion_events,
+        )
+
+        _session_states.clear()
+        _webshop_interfaces.clear()
+        _final_results.clear()
+        _completion_events.clear()
+        yield
+        _session_states.clear()
+        _webshop_interfaces.clear()
+        _final_results.clear()
+        _completion_events.clear()
 
     @pytest.mark.asyncio
     async def test_wait_for_completion_already_completed(self):
         """Should return immediately if already completed."""
-        from src.webshop_mcp import SessionState, WebShopMCPServer
+        from src.webshop_mcp import (
+            SessionState,
+            register_session,
+            signal_completion,
+            wait_for_completion,
+        )
 
         state = SessionState(
             session_id="test",
             goal="Find shoes",
             budget=100.0,
         )
-        server = WebShopMCPServer(state)
+        register_session("test", state, None)
 
         # Mark as completed
         state.mark_completed("checkout")
-        server.signal_completion({"terminated": True, "score": 1.0})
+        signal_completion("test", {"terminated": True, "score": 1.0})
 
         # Should return immediately
-        result = await asyncio.wait_for(server.wait_for_completion(), timeout=1.0)
+        result = await asyncio.wait_for(wait_for_completion("test"), timeout=1.0)
         assert result["terminated"] is True
         assert result["score"] == 1.0
 
     @pytest.mark.asyncio
     async def test_wait_for_completion_timeout(self):
         """Should raise TimeoutError if not completed in time."""
-        from src.webshop_mcp import SessionState, WebShopMCPServer
+        from src.webshop_mcp import SessionState, register_session, wait_for_completion
 
         state = SessionState(
             session_id="test",
             goal="Find shoes",
             budget=100.0,
         )
-        server = WebShopMCPServer(state)
+        register_session("test", state, None)
 
         with pytest.raises(asyncio.TimeoutError):
-            await server.wait_for_completion(timeout=0.1)
+            await wait_for_completion("test", timeout=0.1)
 
     @pytest.mark.asyncio
     async def test_wait_for_completion_signaled(self):
         """Should return when completion is signaled."""
-        from src.webshop_mcp import SessionState, WebShopMCPServer
+        from src.webshop_mcp import (
+            SessionState,
+            register_session,
+            signal_completion,
+            wait_for_completion,
+        )
 
         state = SessionState(
             session_id="test",
             goal="Find shoes",
             budget=100.0,
         )
-        server = WebShopMCPServer(state)
+        register_session("test", state, None)
 
         # Signal completion in background
         async def signal_later():
             await asyncio.sleep(0.1)
             state.mark_completed("checkout")
-            server.signal_completion({"terminated": True, "score": 1.0})
+            signal_completion("test", {"terminated": True, "score": 1.0})
 
         asyncio.create_task(signal_later())
 
         # Wait for completion
-        result = await server.wait_for_completion(timeout=1.0)
+        result = await wait_for_completion("test", timeout=1.0)
         assert result["terminated"] is True
 
     def test_is_completed(self):
         """Should return correct completion status."""
-        from src.webshop_mcp import SessionState, WebShopMCPServer
+        from src.webshop_mcp import SessionState, register_session, is_session_completed
 
         state = SessionState(
             session_id="test",
             goal="Find shoes",
             budget=100.0,
         )
-        server = WebShopMCPServer(state)
+        register_session("test", state, None)
 
-        assert server.is_completed() is False
+        assert is_session_completed("test") is False
 
         state.mark_completed("checkout")
-        assert server.is_completed() is True
+        assert is_session_completed("test") is True
 
     def test_get_final_result_before_completion(self):
         """Should return None before completion."""
-        from src.webshop_mcp import SessionState, WebShopMCPServer
+        from src.webshop_mcp import SessionState, register_session, get_final_result
 
         state = SessionState(
             session_id="test",
             goal="Find shoes",
             budget=100.0,
         )
-        server = WebShopMCPServer(state)
+        register_session("test", state, None)
 
-        assert server.get_final_result() is None
+        assert get_final_result("test") is None
 
     def test_get_final_result_after_completion(self):
         """Should return result after completion."""
-        from src.webshop_mcp import SessionState, WebShopMCPServer
+        from src.webshop_mcp import (
+            SessionState,
+            register_session,
+            signal_completion,
+            get_final_result,
+        )
 
         state = SessionState(
             session_id="test",
             goal="Find shoes",
             budget=100.0,
         )
-        server = WebShopMCPServer(state)
+        register_session("test", state, None)
 
         expected = {"terminated": True, "score": 0.8}
-        server.signal_completion(expected)
+        signal_completion("test", expected)
 
-        result = server.get_final_result()
+        result = get_final_result("test")
         assert result == expected
 
 
