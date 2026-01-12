@@ -2,7 +2,6 @@
 Tests for Phase 9: Assessment Orchestration.
 
 This module tests:
-- Executor: A2A request routing and response parsing
 - WebShopPlusAgent: Main orchestration loop
 - Integration between components
 """
@@ -22,21 +21,8 @@ from src.agent import (
     WebShopPlusAgent,
 )
 from src.evaluator import Evaluator
-from src.executor import (
-    Executor,
-    ExecutorConfig,
-    ExecutorResult,
-    MultiAgentExecutor,
-    RequestType,
-)
 from src.messenger import (
-    A2AMessage,
-    JSONRPCResponse,
-    MessageRole,
     TaskState,
-    create_text_message,
-    extract_action_from_text,
-    parse_action_from_response,
 )
 from src.models import (
     AgentMemory,
@@ -56,214 +42,6 @@ from src.models import (
 )
 from src.state_manager import StateManager
 from src.task_generator import TaskGenerator
-
-
-# =============================================================================
-# Executor Tests
-# =============================================================================
-
-
-class TestExecutorConfig:
-    """Tests for ExecutorConfig."""
-
-    def test_default_config(self):
-        """Test default configuration values."""
-        config = ExecutorConfig()
-        assert config.timeout == 120.0
-        assert config.max_retries == 3
-        assert config.retry_delay == 1.0
-        assert config.action_timeout == 60.0
-
-    def test_custom_config(self):
-        """Test custom configuration values."""
-        config = ExecutorConfig(
-            timeout=30.0,
-            max_retries=5,
-            retry_delay=2.0,
-            action_timeout=15.0,
-        )
-        assert config.timeout == 30.0
-        assert config.max_retries == 5
-        assert config.retry_delay == 2.0
-        assert config.action_timeout == 15.0
-
-
-class TestExecutorResult:
-    """Tests for ExecutorResult."""
-
-    def test_default_result(self):
-        """Test default result values."""
-        result = ExecutorResult()
-        assert result.action is None
-        assert result.raw_response is None
-        assert result.full_text == ""
-        assert result.error is None
-        assert result.timed_out is False
-
-    def test_result_with_action(self):
-        """Test result with action."""
-        result = ExecutorResult(action="search[shoes]")
-        assert result.action == "search[shoes]"
-
-    def test_result_with_error(self):
-        """Test result with error."""
-        result = ExecutorResult(error="Connection failed", timed_out=True)
-        assert result.error == "Connection failed"
-        assert result.timed_out is True
-
-
-class TestExecutor:
-    """Tests for Executor class."""
-
-    @pytest.fixture
-    def executor_config(self):
-        """Create executor config for tests."""
-        return ExecutorConfig(
-            timeout=10.0,
-            action_timeout=5.0,
-            max_retries=1,
-        )
-
-    @pytest.fixture
-    def mock_client(self):
-        """Create mock A2A client."""
-        client = AsyncMock()
-        return client
-
-    @pytest.mark.asyncio
-    async def test_executor_context_manager(self, executor_config):
-        """Test executor context manager."""
-        executor = Executor(config=executor_config)
-        assert executor._client is None
-
-        async with executor:
-            assert executor._client is not None
-            assert executor._owned_client is True
-
-        assert executor._client is None
-
-    @pytest.mark.asyncio
-    async def test_executor_with_provided_client(self, executor_config, mock_client):
-        """Test executor with provided client."""
-        executor = Executor(config=executor_config, client=mock_client)
-        assert executor._client is mock_client
-        assert executor._owned_client is False
-
-    @pytest.mark.asyncio
-    async def test_send_task_instruction(self, executor_config):
-        """Test sending task instruction."""
-        mock_response = JSONRPCResponse(
-            result={
-                "history": [
-                    {
-                        "role": "agent",
-                        "parts": [{"kind": "text", "text": "search[running shoes]"}],
-                    }
-                ]
-            },
-            id="test-123",
-        )
-
-        with patch.object(Executor, "_execute_request", new_callable=AsyncMock) as mock_exec:
-            mock_exec.return_value = ExecutorResult(action="search[running shoes]")
-
-            executor = Executor(config=executor_config)
-            executor._client = AsyncMock()
-
-            result = await executor.send_task_instruction(
-                endpoint="http://agent:8001/a2a",
-                instruction="Find running shoes under $100",
-                task_id="task-1",
-                context_id="ctx-1",
-            )
-
-            assert result.action == "search[running shoes]"
-
-    @pytest.mark.asyncio
-    async def test_send_observation(self, executor_config):
-        """Test sending observation."""
-        with patch.object(Executor, "_execute_request", new_callable=AsyncMock) as mock_exec:
-            mock_exec.return_value = ExecutorResult(action="click[buy now]")
-
-            executor = Executor(config=executor_config)
-            executor._client = AsyncMock()
-
-            result = await executor.send_observation(
-                endpoint="http://agent:8001/a2a",
-                observation="Product page: Nike Running Shoes - $89.99",
-                task_id="task-1",
-                context_id="ctx-1",
-                available_actions={"has_search_bar": True, "clickables": ["buy now", "back"]},
-                reward=0.0,
-                done=False,
-            )
-
-            assert result.action == "click[buy now]"
-
-    @pytest.mark.asyncio
-    async def test_send_error_notice(self, executor_config):
-        """Test sending error notice."""
-        with patch.object(Executor, "_execute_request", new_callable=AsyncMock) as mock_exec:
-            mock_exec.return_value = ExecutorResult(action="search[shoes]")
-
-            executor = Executor(config=executor_config)
-            executor._client = AsyncMock()
-
-            result = await executor.send_error_notice(
-                endpoint="http://agent:8001/a2a",
-                error_message="Invalid action format",
-                task_id="task-1",
-                context_id="ctx-1",
-            )
-
-            # Should return result (may or may not have action)
-            assert isinstance(result, ExecutorResult)
-
-    @pytest.mark.asyncio
-    async def test_extract_response_text(self, executor_config):
-        """Test extracting text from response."""
-        executor = Executor(config=executor_config)
-
-        result = {
-            "history": [
-                {"role": "user", "parts": [{"kind": "text", "text": "Task instruction"}]},
-                {"role": "agent", "parts": [{"kind": "text", "text": "I will search for shoes"}]},
-            ],
-            "artifacts": [
-                {"parts": [{"kind": "text", "text": "search[shoes]"}]}
-            ],
-        }
-
-        text = executor._extract_response_text(result)
-        assert "I will search for shoes" in text
-        assert "search[shoes]" in text
-
-
-class TestMultiAgentExecutor:
-    """Tests for MultiAgentExecutor."""
-
-    @pytest.mark.asyncio
-    async def test_multi_agent_context_manager(self):
-        """Test multi-agent executor context manager."""
-        executor = MultiAgentExecutor()
-
-        async with executor:
-            assert executor._client is not None
-
-        assert executor._client is None
-
-    @pytest.mark.asyncio
-    async def test_get_executor(self):
-        """Test getting executor for agent."""
-        multi_exec = MultiAgentExecutor()
-        multi_exec._client = AsyncMock()
-
-        exec1 = multi_exec.get_executor("agent1")
-        exec2 = multi_exec.get_executor("agent2")
-        exec1_again = multi_exec.get_executor("agent1")
-
-        assert exec1 is exec1_again  # Same instance
-        assert exec1 is not exec2  # Different instances
 
 
 # =============================================================================
@@ -482,6 +260,17 @@ class TestWebShopPlusAgent:
         agent.cancel()
         assert agent._canceled is True
 
+    @pytest.mark.asyncio
+    async def test_agent_context_manager(self):
+        """Test agent context manager."""
+        agent = WebShopPlusAgent()
+        assert agent._initialized is False
+
+        async with agent:
+            assert agent._initialized is True
+
+        assert agent._initialized is False
+
 
 class TestMockPurpleAgent:
     """Tests for MockPurpleAgent."""
@@ -614,78 +403,6 @@ class TestOrchestrationIntegration:
 
 
 # =============================================================================
-# Action Parsing Tests
-# =============================================================================
-
-
-class TestActionParsing:
-    """Tests for action parsing utilities."""
-
-    def test_extract_action_search(self):
-        """Test extracting search action."""
-        text = "I will search for running shoes. search[running shoes]"
-        action = extract_action_from_text(text)
-        assert action == "search[running shoes]"
-
-    def test_extract_action_click(self):
-        """Test extracting click action."""
-        text = "Let me click on the buy button: click[buy now]"
-        action = extract_action_from_text(text)
-        assert action == "click[buy now]"
-
-    def test_extract_action_case_insensitive(self):
-        """Test case-insensitive action extraction."""
-        text = "SEARCH[Laptop Computer]"
-        action = extract_action_from_text(text)
-        assert action == "search[Laptop Computer]"
-
-    def test_extract_action_none(self):
-        """Test when no action found."""
-        text = "I'm thinking about what to do next"
-        action = extract_action_from_text(text)
-        assert action is None
-
-    def test_parse_action_from_response_history(self):
-        """Test parsing action from response with history."""
-        response = JSONRPCResponse(
-            result={
-                "history": [
-                    {"role": "user", "parts": [{"kind": "text", "text": "Task"}]},
-                    {"role": "agent", "parts": [{"kind": "text", "text": "search[shoes]"}]},
-                ]
-            },
-            id="test-1",
-        )
-
-        action = parse_action_from_response(response)
-        assert action == "search[shoes]"
-
-    def test_parse_action_from_response_no_action_in_message(self):
-        """Test parsing when agent message has no action."""
-        response = JSONRPCResponse(
-            result={
-                "history": [
-                    {"role": "agent", "parts": [{"kind": "text", "text": "Thinking about options..."}]},
-                ],
-            },
-            id="test-1",
-        )
-
-        action = parse_action_from_response(response)
-        assert action is None  # No action in message means None
-
-    def test_parse_action_from_response_error(self):
-        """Test parsing action from error response."""
-        response = JSONRPCResponse(
-            error={"code": -32600, "message": "Invalid request"},
-            id="test-1",
-        )
-
-        action = parse_action_from_response(response)
-        assert action is None
-
-
-# =============================================================================
 # State Manager Integration Tests
 # =============================================================================
 
@@ -740,22 +457,6 @@ class TestStateManagerIntegration:
         assert len(memory.sessions) == 2
         all_prefs = memory.get_all_preferences()
         assert "color" in all_prefs
-
-
-# =============================================================================
-# RequestType Tests
-# =============================================================================
-
-
-class TestRequestType:
-    """Tests for RequestType enum."""
-
-    def test_request_types(self):
-        """Test all request type values."""
-        assert RequestType.TASK_INSTRUCTION.value == "task_instruction"
-        assert RequestType.OBSERVATION.value == "observation"
-        assert RequestType.ERROR_NOTICE.value == "error_notice"
-        assert RequestType.SESSION_END.value == "session_end"
 
 
 if __name__ == "__main__":

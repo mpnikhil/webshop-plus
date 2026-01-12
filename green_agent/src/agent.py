@@ -3,12 +3,8 @@ WebShop+ Assessment Orchestration Agent.
 
 This module provides the main orchestration logic for running assessments:
 - WebShopPlusAgent: Main agent class that orchestrates task execution
-- Task dispatch loop: send task -> receive action -> step -> send observation -> evaluate
+- Task dispatch: single kickoff with PurpleAgentClient + MCP tools
 - Result aggregation and reporting
-
-Supports two execution modes:
-- Legacy mode: Multi-step A2A interaction using Executor
-- MCP mode: Single kickoff with PurpleAgentClient + MCP tools
 """
 
 import asyncio
@@ -19,7 +15,6 @@ from typing import Any, AsyncGenerator, Callable, Optional, TYPE_CHECKING
 import structlog
 
 from .evaluator import Evaluator
-from .executor import Executor, ExecutorConfig
 from .llm_client import LLMClient
 from .messenger import (
     Artifact,
@@ -33,7 +28,6 @@ from .models import (
     AssessmentResults,
     BudgetConstrainedTask,
     EvaluationResult,
-    ErrorRecoveryTask,
     NegativeConstraintTask,
     PreferenceMemoryTask,
     SessionState,
@@ -63,7 +57,6 @@ class AgentConfig:
     use_llm_evaluation: bool = True
     webshop_mode: str = "preview"
     # MCP configuration
-    use_mcp: bool = False  # Enable MCP-based execution
     mcp_host: str = "localhost"
     mcp_port: int = 8000
     default_budget: float = 100.0  # Default budget when not specified in task
@@ -91,7 +84,8 @@ class WebShopPlusAgent:
     - Task selection and loading from TaskGenerator
     - Session management via StateManager
     - WebShop environment interaction via WebShopWrapper
-    - A2A communication with purple agents via Executor
+    - A2A communication with purple agents via PurpleAgentClient
+    - MCP-based tool execution via SessionManager
     - Scoring via Evaluator
 
     Example:
@@ -122,7 +116,7 @@ class WebShopPlusAgent:
             webshop: WebShop wrapper instance (creates default if None).
             evaluator: Evaluator instance (creates default if None).
             llm_client: LLM client for evaluation (creates default if None).
-            session_manager: MCP session manager (optional, enables MCP mode).
+            session_manager: MCP session manager for tool execution.
         """
         self.config = config or AgentConfig()
 
@@ -132,7 +126,6 @@ class WebShopPlusAgent:
         self._webshop = webshop
         self._evaluator = evaluator
         self._llm_client = llm_client
-        self._executor: Optional[Executor] = None
         self._session_manager = session_manager
 
         # Runtime state
@@ -166,21 +159,11 @@ class WebShopPlusAgent:
 
     async def __aenter__(self) -> "WebShopPlusAgent":
         """Async context manager entry."""
-        executor_config = ExecutorConfig(
-            timeout=self.config.task_timeout_seconds,
-            action_timeout=self.config.action_timeout_seconds,
-            max_retries=self.config.max_retries_per_action,
-        )
-        self._executor = Executor(config=executor_config)
-        await self._executor.__aenter__()
         self._initialized = True
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit."""
-        if self._executor:
-            await self._executor.__aexit__(exc_type, exc_val, exc_tb)
-            self._executor = None
         self._initialized = False
 
     def cancel(self) -> None:
@@ -662,10 +645,7 @@ class WebShopPlusAgent:
         agent_id: str,
     ) -> TaskExecutionResult:
         """
-        Execute a single task.
-
-        Dispatches to MCP-based execution if use_mcp is enabled,
-        otherwise uses the legacy multi-step A2A interaction.
+        Execute a single task using MCP-based execution.
 
         Args:
             task: The task to execute.
@@ -675,122 +655,7 @@ class WebShopPlusAgent:
         Returns:
             TaskExecutionResult with evaluation.
         """
-        # Dispatch to MCP path if enabled
-        if self.config.use_mcp:
-            return await self._dispatch_task_to_purple(task, shopper_endpoint, agent_id)
-
-        # Legacy multi-step A2A execution
-        result = TaskExecutionResult(
-            task_id=task.task_id,
-            session_id="",
-        )
-
-        # Create session
-        session = self.state_manager.create_session(task.task_id, agent_id)
-        result.session_id = session.session_id
-
-        # Handle special setup for error recovery tasks
-        if isinstance(task, ErrorRecoveryTask):
-            self.state_manager.inject_cart_from_setup(task.setup.cart_contents)
-
-        # Get agent memory for preference tasks
-        memory: Optional[AgentMemory] = None
-        if isinstance(task, PreferenceMemoryTask):
-            memory = self.state_manager.get_agent_memory(agent_id)
-
-        try:
-            # Reset WebShop environment
-            initial_observation = self.webshop.reset()
-            context_id = str(uuid.uuid4())
-
-            # Send task instruction to agent
-            exec_result = await self._executor.send_task_instruction(
-                endpoint=shopper_endpoint,
-                instruction=task.instruction,
-                task_id=task.task_id,
-                context_id=context_id,
-            )
-
-            if exec_result.error and not exec_result.action:
-                result.error = exec_result.error
-                session.error = exec_result.error
-                return self._finalize_task(result, session, task, memory)
-
-            # Get first action
-            action = exec_result.action
-
-            # Task loop
-            done = False
-            total_reward = 0.0
-
-            while (
-                not done
-                and result.actions_taken < self.config.max_actions_per_task
-                and not self._canceled
-            ):
-                if not action:
-                    # No action received, try once more
-                    exec_result = await self._executor.send_error_notice(
-                        endpoint=shopper_endpoint,
-                        error_message="No valid action received. Please respond with search[query] or click[element].",
-                        task_id=task.task_id,
-                        context_id=context_id,
-                    )
-                    action = exec_result.action
-                    if not action:
-                        result.error = "Agent failed to provide valid actions"
-                        break
-
-                # Execute action in WebShop
-                step_result = self.webshop.step(action)
-                result.actions_taken += 1
-
-                # Record action in session
-                self.state_manager.record_action(
-                    session.session_id,
-                    action,
-                    step_result.observation,
-                    step_result.reward,
-                )
-
-                total_reward += step_result.reward
-                done = step_result.done
-
-                if done:
-                    break
-
-                # Get available actions
-                available_actions = self.webshop.get_available_actions()
-
-                # Send observation to agent
-                exec_result = await self._executor.send_observation(
-                    endpoint=shopper_endpoint,
-                    observation=step_result.observation,
-                    task_id=task.task_id,
-                    context_id=context_id,
-                    available_actions=available_actions,
-                    reward=step_result.reward,
-                    done=done,
-                )
-
-                if exec_result.timed_out:
-                    result.timed_out = True
-                    result.error = "Agent timed out"
-                    break
-
-                action = exec_result.action
-
-            result.total_reward = total_reward
-            result.completed = done
-
-        except asyncio.TimeoutError:
-            result.timed_out = True
-            result.error = "Task execution timed out"
-        except Exception as e:
-            result.error = f"Task execution error: {str(e)}"
-            logger.error("Task execution error", task_id=task.task_id, error=str(e))
-
-        return self._finalize_task(result, session, task, memory)
+        return await self._dispatch_task_to_purple(task, shopper_endpoint, agent_id)
 
     def _finalize_task(
         self,

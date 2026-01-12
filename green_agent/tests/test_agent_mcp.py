@@ -38,22 +38,12 @@ from a2a.types import TaskState
 
 @pytest.fixture
 def mcp_agent_config():
-    """Agent config with MCP enabled."""
+    """Agent config for MCP-based execution."""
     return AgentConfig(
-        use_mcp=True,
         mcp_host="localhost",
         mcp_port=8000,
         max_actions_per_task=10,
         default_budget=100.0,
-    )
-
-
-@pytest.fixture
-def non_mcp_agent_config():
-    """Agent config with MCP disabled (legacy mode)."""
-    return AgentConfig(
-        use_mcp=False,
-        max_actions_per_task=10,
     )
 
 
@@ -147,11 +137,6 @@ def mock_evaluator():
 class TestAgentConfigMCP:
     """Tests for MCP-related AgentConfig fields."""
 
-    def test_default_mcp_disabled(self):
-        """MCP is disabled by default."""
-        config = AgentConfig()
-        assert config.use_mcp is False
-
     def test_mcp_config_fields(self):
         """MCP config fields have correct defaults."""
         config = AgentConfig()
@@ -162,12 +147,10 @@ class TestAgentConfigMCP:
     def test_custom_mcp_config(self):
         """MCP config can be customized."""
         config = AgentConfig(
-            use_mcp=True,
             mcp_host="mcp.example.com",
             mcp_port=9000,
             default_budget=200.0,
         )
-        assert config.use_mcp is True
         assert config.mcp_host == "mcp.example.com"
         assert config.mcp_port == 9000
         assert config.default_budget == 200.0
@@ -252,7 +235,6 @@ class TestGetMcpUri:
     def test_custom_host_port(self):
         """MCP URI uses custom host and port."""
         config = AgentConfig(
-            use_mcp=True,
             mcp_host="mcp.example.com",
             mcp_port=9000,
         )
@@ -478,14 +460,14 @@ class TestTaskDispatch:
     """Tests for task dispatch in _execute_task."""
 
     @pytest.mark.asyncio
-    async def test_dispatch_to_mcp_when_enabled(
+    async def test_dispatch_to_mcp(
         self,
         mcp_agent_config,
         budget_task,
         mock_state_manager,
         mock_evaluator,
     ):
-        """Task dispatches to MCP path when use_mcp is True."""
+        """Task dispatches to MCP path."""
         agent = WebShopPlusAgent(
             config=mcp_agent_config,
             state_manager=mock_state_manager,
@@ -514,57 +496,6 @@ class TestTaskDispatch:
             budget_task, "http://localhost:8001", "test-agent"
         )
         assert result.session_id == "mcp-session"
-
-    @pytest.mark.asyncio
-    async def test_dispatch_to_legacy_when_disabled(
-        self,
-        non_mcp_agent_config,
-        budget_task,
-        mock_state_manager,
-        mock_evaluator,
-    ):
-        """Task dispatches to legacy path when use_mcp is False."""
-        from src.executor import Executor, ExecutorResult
-        from src.webshop_wrapper import StepResult
-
-        agent = WebShopPlusAgent(
-            config=non_mcp_agent_config,
-            state_manager=mock_state_manager,
-            evaluator=mock_evaluator,
-        )
-
-        # Create mock executor
-        mock_executor = AsyncMock(spec=Executor)
-        mock_executor.send_task_instruction.return_value = ExecutorResult(
-            action="click[buy now]"
-        )
-        mock_executor.send_observation.return_value = ExecutorResult(
-            action=None
-        )
-
-        # Mock webshop
-        mock_webshop = MagicMock()
-        mock_webshop.reset.return_value = "Welcome"
-        mock_webshop.step.return_value = StepResult(
-            observation="Done",
-            reward=1.0,
-            done=True,
-            info={},
-        )
-        mock_webshop.get_available_actions.return_value = {"clickables": []}
-        agent._webshop = mock_webshop
-        agent._executor = mock_executor
-        agent._initialized = True
-
-        result = await agent._execute_task(
-            task=budget_task,
-            shopper_endpoint="http://localhost:8001",
-            agent_id="test-agent",
-        )
-
-        # Should use legacy executor
-        mock_executor.send_task_instruction.assert_called_once()
-        assert result.completed is True
 
 
 # =============================================================================
