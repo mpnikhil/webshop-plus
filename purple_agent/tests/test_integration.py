@@ -279,75 +279,76 @@ class TestTaskLifecycle:
         assert "status" in result
 
     def test_message_send_returns_completed_status(self, client, mock_llm_client):
-        """Test message/send returns completed status for synchronous tasks."""
+        """Test message/send returns completed status when 'done' is sent.
+
+        In the AAA architecture, non-MCP messages are treated as TCK tests
+        and require 'done' to complete.
+        """
         message_id = str(uuid.uuid4())
 
-        with patch("src.agent.LLMClient") as MockLLM:
-            mock_llm = MagicMock()
-            mock_llm.complete = mock_llm_client
-            MockLLM.return_value = mock_llm
-
-            response = client.post(
-                "/a2a",
-                json={
-                    "jsonrpc": "2.0",
-                    "method": "message/send",
-                    "params": {
-                        "message": {
-                            "messageId": message_id,
-                            "role": "user",
-                            "parts": [{"kind": "text", "text": "Buy a laptop"}],
-                        },
+        # Send "done" to complete immediately
+        response = client.post(
+            "/a2a",
+            json={
+                "jsonrpc": "2.0",
+                "method": "message/send",
+                "params": {
+                    "message": {
+                        "messageId": message_id,
+                        "role": "user",
+                        "parts": [{"kind": "text", "text": "done"}],
                     },
-                    "id": "test-1",
                 },
-            )
+                "id": "test-1",
+            },
+        )
 
         assert response.status_code == 200
         data = response.json()
         result = data["result"]
-        # Non-streaming agent should complete synchronously
+        # Message containing "done" should complete
         assert result["status"]["state"] == "completed"
 
     def test_message_send_returns_action_in_message(self, client, mock_llm_client):
-        """Test message/send returns action in response message."""
+        """Test message/send returns response message for simple messages.
+
+        In the AAA architecture, non-MCP messages are treated as TCK tests
+        and return input-required state with echo response.
+        """
         message_id = str(uuid.uuid4())
 
-        with patch("src.agent.LLMClient") as MockLLM:
-            mock_llm = MagicMock()
-            mock_llm.complete = mock_llm_client
-            MockLLM.return_value = mock_llm
-
-            response = client.post(
-                "/a2a",
-                json={
-                    "jsonrpc": "2.0",
-                    "method": "message/send",
-                    "params": {
-                        "message": {
-                            "messageId": message_id,
-                            "role": "user",
-                            "parts": [{"kind": "text", "text": "Find running shoes under $100"}],
-                        },
+        response = client.post(
+            "/a2a",
+            json={
+                "jsonrpc": "2.0",
+                "method": "message/send",
+                "params": {
+                    "message": {
+                        "messageId": message_id,
+                        "role": "user",
+                        "parts": [{"kind": "text", "text": "Hello world"}],
                     },
-                    "id": "test-1",
                 },
-            )
+                "id": "test-1",
+            },
+        )
 
         assert response.status_code == 200
         data = response.json()
         result = data["result"]
 
-        # Check for action in status message
+        # Simple messages go to TCK handler and return input-required
+        assert result["status"]["state"] == "input-required"
+
+        # Check for echo in status message
         status_message = result["status"].get("message")
         assert status_message is not None
         assert status_message["role"] == "agent"
-        # Action should be in the message parts
+        # Message should echo the input
         parts = status_message["parts"]
         assert len(parts) > 0
-        # Extract text from parts
-        action_text = parts[0].get("text", "")
-        assert "search[" in action_text.lower() or "running shoes" in action_text.lower()
+        response_text = parts[0].get("text", "")
+        assert "Received:" in response_text or "Hello world" in response_text
 
 
 # =============================================================================

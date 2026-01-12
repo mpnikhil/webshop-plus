@@ -1,16 +1,17 @@
 """
 AgentExecutor implementation for WebShop+ Purple Agent.
 
-This module implements the A2A SDK AgentExecutor interface, providing
-the bridge between the SDK's request handling and the ShopperAgent logic.
+This module implements the A2A SDK AgentExecutor interface for:
+1. MCP-based shopping tasks (via ADK ShoppingAgent)
+2. TCK conformance testing (simple message echo, resubscribe tests)
 
 Based on the RDI Foundation agent-template pattern:
 https://github.com/RDI-Foundation/agent-template
 
-Updated to support A2A TCK conformance testing with:
-- Simple message handling (input-required state)
-- TCK resubscribe test support
-- Task continuation and cancellation
+AAA Architecture:
+- Shopping tasks require MCP resource URI in kickoff message
+- ShoppingAgent uses ADK + McpToolset for ReAct loop execution
+- No legacy regex-based action parsing
 """
 
 import asyncio
@@ -25,18 +26,10 @@ from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
 from a2a.types import Message, Role, TaskState, TextPart
 
-from src.agent import ShopperAgent
 from src.messenger import get_message_text
+from src.shopping_agent import ShoppingAgent
 
 logger = structlog.get_logger()
-
-# Terminal states where no further processing is needed
-TERMINAL_STATES = {
-    TaskState.completed,
-    TaskState.canceled,
-    TaskState.failed,
-    TaskState.rejected,
-}
 
 # TCK streaming timeout for conformance testing
 # Tasks with messageId starting with "test-resubscribe-message-id" must run for
@@ -64,46 +57,16 @@ def _is_tck_resubscribe_test(message: Message | None) -> bool:
     return False
 
 
-def _is_simple_tck_message(message: Message | None, metadata: dict | None) -> bool:
-    """Check if this is a simple TCK test message (not a shopping task).
-
-    Simple messages are used for A2A protocol conformance testing and should
-    use input-required state to allow task continuation and cancellation.
-
-    Args:
-        message: The incoming A2A message.
-        metadata: The request metadata.
-
-    Returns:
-        True if this is a simple test message, not a shopping task.
-    """
-    # If metadata has specific fields, it's likely a real shopping task
-    if metadata:
-        if metadata.get("task_type") or metadata.get("participants") or metadata.get("config"):
-            return False
-
-    # Check message content for shopping task indicators
-    if message:
-        text = get_message_text(message).lower()
-        # Shopping task indicators
-        shopping_keywords = ["find", "buy", "purchase", "search for", "get me", "i need", "looking for"]
-        for keyword in shopping_keywords:
-            if keyword in text:
-                return False
-
-    # Default to simple message (for TCK tests)
-    return True
-
-
 class Executor(AgentExecutor):
     """
     A2A AgentExecutor implementation for the shopping agent.
 
-    This executor:
-    - Manages ShopperAgent instances per context (session)
-    - Bridges SDK requests to the ShopperAgent.run() method
-    - Handles task state transitions and error reporting
-    - Supports A2A TCK conformance testing with simple message handling
+    This executor handles:
+    1. MCP-based shopping tasks - Routes to ADK ShoppingAgent
+    2. TCK conformance tests - Simple message echo and resubscribe tests
+
+    Shopping tasks MUST include an MCP resource URI in the kickoff message.
+    Messages without MCP resources are treated as TCK conformance tests.
 
     Example:
         >>> executor = Executor()
@@ -112,19 +75,21 @@ class Executor(AgentExecutor):
     """
 
     def __init__(self) -> None:
-        """Initialize the executor with empty agent cache."""
-        self._agents: dict[str, ShopperAgent] = {}
-        self._simple_task_states: dict[str, dict] = {}  # Track simple echo tasks
+        """Initialize the executor."""
+        self._simple_task_states: dict[str, dict] = {}  # Track TCK echo tasks
+        self._shopping_agent = ShoppingAgent()  # ADK-based agent for MCP tasks
 
     async def execute(
         self,
         context: RequestContext,
         event_queue: EventQueue,
     ) -> None:
-        """Execute a task by delegating to ShopperAgent.
+        """Execute a task.
 
-        For simple messages without shopping task indicators (e.g., TCK tests),
-        uses input-required state to allow task continuation and cancellation.
+        Routes to:
+        1. TCK resubscribe test handler (special messageId prefix)
+        2. MCP shopping task handler (has MCP resource in message)
+        3. Simple TCK message handler (fallback for conformance tests)
 
         Args:
             context: Request context containing message, task ID, and context ID.
@@ -154,33 +119,15 @@ class Executor(AgentExecutor):
                 await self._handle_tck_resubscribe_test(updater, context)
                 return
 
-            # Check if this is a simple TCK test message (not a shopping task)
-            metadata = context.metadata or {}
-            if _is_simple_tck_message(context.message, metadata):
-                await self._handle_simple_message(updater, context)
+            # Check if this is an MCP-based shopping task
+            # MCP-based tasks have a resources array with type="mcp"
+            mcp_uri = self._extract_mcp_uri(context.message)
+            if mcp_uri:
+                await self._handle_mcp_task(updater, context, mcp_uri)
                 return
 
-            # This is a shopping task - use the ShopperAgent
-            # Get or create agent for this context (session)
-            if context_id not in self._agents:
-                logger.info("Creating new ShopperAgent", context_id=context_id)
-                self._agents[context_id] = ShopperAgent()
-            agent = self._agents[context_id]
-
-            # Delegate to agent's run() method
-            # The agent will call updater.complete() internally
-            await agent.run(context.message, updater)
-
-            # Note: agent.run() already calls updater.complete()
-            # so we don't need to call it here. The status check below
-            # is only for edge cases where run() didn't complete.
-            current_task = context.current_task
-            if current_task and current_task.status.state not in TERMINAL_STATES:
-                logger.warning(
-                    "Task not in terminal state after run(), completing",
-                    state=current_task.status.state,
-                )
-                await updater.complete()
+            # No MCP resource - treat as simple TCK test message
+            await self._handle_simple_message(updater, context)
 
         except Exception as e:
             logger.exception("Executor caught exception", error=str(e))
@@ -324,6 +271,89 @@ class Executor(AgentExecutor):
             message=self._create_message("TCK resubscribe test completed.")
         )
 
+    async def _handle_mcp_task(
+        self,
+        updater: TaskUpdater,
+        context: RequestContext,
+        mcp_uri: str,
+    ) -> None:
+        """Handle MCP-based shopping tasks using ADK ShoppingAgent.
+
+        This method is called when the kickoff message contains an MCP resource URI.
+        It extracts task data and delegates to the ShoppingAgent which uses ADK's
+        ReAct loop with McpToolset to execute the shopping task.
+
+        Args:
+            updater: The task updater for publishing status.
+            context: The request context containing the kickoff message.
+            mcp_uri: The MCP server URI extracted from the kickoff message.
+
+        AAA Stage 10: Wire executor to ShoppingAgent.
+        """
+        task_id = context.task_id or "unknown"
+
+        logger.info(
+            "Handling MCP-based shopping task",
+            task_id=task_id,
+            mcp_uri=mcp_uri,
+        )
+
+        # Extract task data from the kickoff message
+        task_data = self._extract_task_data(context.message)
+        if not task_data:
+            logger.error("Failed to extract task data from MCP kickoff message")
+            await updater.failed(
+                message=self._create_message("Error: Invalid kickoff message - missing goal")
+            )
+            return
+
+        # Add session ID for tracking
+        task_data["session_id"] = task_id
+
+        logger.info(
+            "Extracted task data for MCP shopping",
+            goal=task_data.get("goal"),
+            budget=task_data.get("budget"),
+            constraints=task_data.get("constraints"),
+        )
+
+        # Start work status
+        await updater.start_work(
+            message=self._create_message(f"Starting shopping task: {task_data.get('goal')}")
+        )
+
+        # Run the ADK ShoppingAgent
+        try:
+            result = await self._shopping_agent.run(mcp_uri, task_data)
+
+            logger.info(
+                "ShoppingAgent completed",
+                success=result.get("success"),
+                turns_used=result.get("turns_used"),
+            )
+
+            # Format the response message
+            if result.get("success"):
+                response_text = result.get("final_message", "Shopping task completed successfully.")
+                await updater.complete(
+                    message=self._create_message(response_text)
+                )
+            else:
+                error_msg = result.get("error", "Unknown error")
+                final_msg = result.get("final_message", "")
+                response_text = f"Shopping task failed: {error_msg}"
+                if final_msg:
+                    response_text += f"\nDetails: {final_msg}"
+                await updater.failed(
+                    message=self._create_message(response_text)
+                )
+
+        except Exception as e:
+            logger.exception("ShoppingAgent raised exception", error=str(e))
+            await updater.failed(
+                message=self._create_message(f"Shopping agent error: {str(e)}")
+            )
+
     def _create_message(self, text: str) -> Message:
         """Create a simple text message.
 
@@ -339,21 +369,17 @@ class Executor(AgentExecutor):
             parts=[TextPart(text=text)],
         )
 
-    def get_agent(self, context_id: str) -> ShopperAgent | None:
-        """Get the agent for a context ID (for testing purposes).
+    def clear_state(self) -> None:
+        """Clear all cached state (for testing purposes)."""
+        self._simple_task_states.clear()
 
-        Args:
-            context_id: The context ID to look up.
+    def get_shopping_agent(self) -> ShoppingAgent:
+        """Get the ADK ShoppingAgent instance (for testing purposes).
 
         Returns:
-            The ShopperAgent instance or None if not found.
+            The ShoppingAgent instance used for MCP-based tasks.
         """
-        return self._agents.get(context_id)
-
-    def clear_agents(self) -> None:
-        """Clear all cached agents (for testing purposes)."""
-        self._agents.clear()
-        self._simple_task_states.clear()
+        return self._shopping_agent
 
     def _extract_mcp_uri(self, message: Message) -> Optional[str]:
         """Extract MCP resource URI from an A2A kickoff message.
