@@ -647,16 +647,64 @@ class WebShopMCPServer:
             This is a terminal action - calling it ends the session and
             returns the final evaluation with success/failure and score.
 
+            Scoring:
+            - Empty cart: score = 0.0 (failure_reason: "empty_cart")
+            - Over budget: score = 0.3 (failure_reason: "budget_exceeded")
+            - Success (items in cart, within budget): score = 1.0
+
             Returns:
-                Evaluation dict with terminated=True, cart contents,
-                total, budget comparison, and score.
+                Evaluation dict with:
+                - terminated: Always True (this is a terminal action)
+                - reason: "checkout"
+                - cart: List of items in cart
+                - total: Total cart amount
+                - budget: The budget constraint
+                - turns_used: Number of turns used
+                - success: Boolean indicating if purchase was successful
+                - score: Numeric score (0.0, 0.3, or 1.0)
+                - failure_reason: Only present if success is False
             """
-            # Placeholder - will be implemented in Stage 5
-            return {
-                "error": "Not implemented",
-                "message": "checkout() will be implemented in Stage 5",
+            # Mark session as completed
+            server.state.mark_completed("checkout")
+
+            # Calculate total
+            total = server.state.get_cart_total()
+
+            # Build base evaluation
+            evaluation: dict[str, Any] = {
+                "terminated": True,
+                "reason": "checkout",
                 "session_id": server.state.session_id,
+                "cart": server.state.cart,
+                "cart_size": len(server.state.cart),
+                "total": total,
+                "budget": server.state.budget,
+                "turns_used": server.state.turn_count,
+                "max_turns": server.state.max_turns,
             }
+
+            # Determine success/failure and score
+            if not server.state.cart:
+                # Empty cart - worst outcome
+                evaluation["success"] = False
+                evaluation["failure_reason"] = "empty_cart"
+                evaluation["score"] = 0.0
+            elif total > server.state.budget:
+                # Over budget - partial failure
+                evaluation["success"] = False
+                evaluation["failure_reason"] = "budget_exceeded"
+                evaluation["over_budget_by"] = total - server.state.budget
+                evaluation["score"] = 0.3
+            else:
+                # Success - items in cart and within budget
+                evaluation["success"] = True
+                evaluation["budget_remaining"] = server.state.budget - total
+                evaluation["score"] = 1.0
+
+            # Add history summary for evaluation context
+            evaluation["history_length"] = len(server.state.history)
+
+            return evaluation
 
     def get_app(self) -> Any:
         """Return Starlette app for mounting.
