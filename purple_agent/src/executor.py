@@ -14,8 +14,10 @@ Updated to support A2A TCK conformance testing with:
 """
 
 import asyncio
+import json
 import os
 import uuid
+from typing import Any, Optional
 
 import structlog
 from a2a.server.agent_execution import AgentExecutor, RequestContext
@@ -352,3 +354,94 @@ class Executor(AgentExecutor):
         """Clear all cached agents (for testing purposes)."""
         self._agents.clear()
         self._simple_task_states.clear()
+
+    def _extract_mcp_uri(self, message: Message) -> Optional[str]:
+        """Extract MCP resource URI from an A2A kickoff message.
+
+        The green agent sends a kickoff message with a JSON payload containing:
+        {
+            "goal": "...",
+            "budget": 50.0,
+            "constraints": [...],
+            "resources": [
+                {"type": "mcp", "uri": "http://..."}
+            ]
+        }
+
+        Args:
+            message: The A2A message containing the kickoff payload.
+
+        Returns:
+            The MCP URI string if found, None otherwise.
+
+        Example:
+            >>> uri = executor._extract_mcp_uri(message)
+            >>> print(uri)
+            http://localhost:8000/mcp/session-123
+        """
+        text = get_message_text(message)
+        if not text:
+            return None
+
+        try:
+            data = json.loads(text)
+            resources = data.get("resources", [])
+            for resource in resources:
+                if isinstance(resource, dict) and resource.get("type") == "mcp":
+                    uri = resource.get("uri")
+                    if uri:
+                        return uri
+        except json.JSONDecodeError:
+            logger.debug("Message is not JSON, cannot extract MCP URI", text=text[:100])
+        except (TypeError, AttributeError) as e:
+            logger.debug("Error parsing message for MCP URI", error=str(e))
+
+        return None
+
+    def _extract_task_data(self, message: Message) -> dict[str, Any]:
+        """Extract task data (goal, budget, constraints) from an A2A kickoff message.
+
+        The green agent sends a kickoff message with a JSON payload containing:
+        {
+            "goal": "Find running shoes under $50",
+            "budget": 50.0,
+            "constraints": ["waterproof", "size 10"]
+        }
+
+        Args:
+            message: The A2A message containing the kickoff payload.
+
+        Returns:
+            Dict with keys: goal, budget, constraints. Empty dict if parsing fails.
+            - goal: str - The shopping task goal
+            - budget: float - Maximum spending allowed (default 100.0)
+            - constraints: list[str] - List of constraints (default [])
+
+        Example:
+            >>> task_data = executor._extract_task_data(message)
+            >>> print(task_data)
+            {'goal': 'Find running shoes', 'budget': 50.0, 'constraints': ['waterproof']}
+        """
+        text = get_message_text(message)
+        if not text:
+            return {}
+
+        try:
+            data = json.loads(text)
+            # Extract goal - required field
+            goal = data.get("goal")
+            if not goal:
+                logger.debug("No goal found in kickoff message")
+                return {}
+
+            return {
+                "goal": goal,
+                "budget": float(data.get("budget", 100.0)),
+                "constraints": list(data.get("constraints", [])),
+            }
+        except json.JSONDecodeError:
+            logger.debug("Message is not JSON, cannot extract task data", text=text[:100])
+        except (TypeError, ValueError, AttributeError) as e:
+            logger.debug("Error parsing message for task data", error=str(e))
+
+        return {}
