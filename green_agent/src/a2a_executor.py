@@ -546,39 +546,19 @@ class WebShopPlusExecutor(AgentExecutor):
 
         return session_id, mcp_uri
 
-    def build_mcp_kickoff(
-        self,
-        goal: str,
-        budget: float,
-        constraints: list[str],
-        mcp_uri: str,
-    ) -> dict[str, Any]:
-        """Build a kickoff message with MCP resource for purple agents.
+    def get_mcp_uri(self, session_id: str) -> str:
+        """Get the MCP URI for a given session ID.
 
-        This creates the standardized kickoff format that purple agents
-        use to receive task details and the MCP endpoint for tool execution.
+        This is a convenience method for getting the full URI without
+        needing to call create_mcp_session() again.
 
         Args:
-            goal: The shopping task goal.
-            budget: Maximum allowed spending.
-            constraints: List of constraints.
-            mcp_uri: The MCP endpoint URI for this session.
+            session_id: The session ID.
 
         Returns:
-            Kickoff dict ready to be serialized to JSON.
+            Full MCP URI like "http://localhost:8000/mcp/session123".
         """
-        return {
-            "goal": goal,
-            "budget": budget,
-            "constraints": constraints,
-            "resources": [
-                {
-                    "type": "mcp",
-                    "uri": mcp_uri,
-                    "description": "WebShop MCP server for search, click, and checkout tools",
-                }
-            ],
-        }
+        return f"{self._get_mcp_base_url()}/{session_id}"
 
     async def cleanup_mcp_session(self, session_id: str) -> bool:
         """Clean up an MCP session after completion.

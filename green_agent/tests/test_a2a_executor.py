@@ -362,23 +362,17 @@ class TestExecutorMCPSupport:
         executor = WebShopPlusExecutor(mcp_host="myhost", mcp_port=9000)
         assert executor._get_mcp_base_url() == "http://myhost:9000/mcp"
 
-    def test_build_mcp_kickoff(self):
-        """Should build correct kickoff dict with MCP resource."""
+    def test_get_mcp_uri(self):
+        """Should return correct MCP URI for session ID."""
+        executor = WebShopPlusExecutor(mcp_host="myhost", mcp_port=9000)
+        uri = executor.get_mcp_uri("session123")
+        assert uri == "http://myhost:9000/mcp/session123"
+
+    def test_get_mcp_uri_default_host_port(self):
+        """Should use default host and port for MCP URI."""
         executor = WebShopPlusExecutor()
-
-        kickoff = executor.build_mcp_kickoff(
-            goal="Find running shoes under $50",
-            budget=50.0,
-            constraints=["no synthetic"],
-            mcp_uri="http://localhost:8000/mcp/session123",
-        )
-
-        assert kickoff["goal"] == "Find running shoes under $50"
-        assert kickoff["budget"] == 50.0
-        assert kickoff["constraints"] == ["no synthetic"]
-        assert len(kickoff["resources"]) == 1
-        assert kickoff["resources"][0]["type"] == "mcp"
-        assert kickoff["resources"][0]["uri"] == "http://localhost:8000/mcp/session123"
+        uri = executor.get_mcp_uri("abc-def-123")
+        assert uri == "http://localhost:8000/mcp/abc-def-123"
 
     @pytest.mark.asyncio
     async def test_create_mcp_session(self):
