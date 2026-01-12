@@ -6,6 +6,7 @@ This module provides an `AgentExecutor` implementation that wraps the existing
 
 Stage 3 of the A2A SDK Migration.
 Updated in Stage 8 to support A2A TCK conformance testing.
+Updated in AAA Stage 7 to support MCP-based tool execution.
 """
 
 import asyncio
@@ -26,6 +27,7 @@ from a2a.types import (
 )
 
 from .agent import AgentConfig, WebShopPlusAgent
+from .webshop_mcp import SessionManager
 from .models import AssessmentConfig, TaskUpdate
 
 logger = structlog.get_logger()
@@ -164,18 +166,37 @@ class WebShopPlusExecutor(AgentExecutor):
     delegating actual assessment logic to `WebShopPlusAgent` and using
     `TaskUpdater` for status updates.
 
+    For MCP-enabled assessments, this executor creates MCP sessions for each
+    task and includes the MCP URI in the kickoff message to purple agents.
+
     Example:
-        executor = WebShopPlusExecutor()
+        executor = WebShopPlusExecutor(
+            session_manager=session_manager,
+            mcp_host="localhost",
+            mcp_port=8000,
+        )
         # Used with DefaultRequestHandler in SDK-based server
     """
 
-    def __init__(self, agent_config: Optional[AgentConfig] = None):
+    def __init__(
+        self,
+        agent_config: Optional[AgentConfig] = None,
+        session_manager: Optional[SessionManager] = None,
+        mcp_host: str = "localhost",
+        mcp_port: int = 8000,
+    ):
         """Initialize the executor.
 
         Args:
             agent_config: Optional configuration for the underlying agent.
+            session_manager: Optional SessionManager for MCP sessions.
+            mcp_host: Host for MCP URI generation.
+            mcp_port: Port for MCP URI generation.
         """
         self._agent_config = agent_config or AgentConfig()
+        self._session_manager = session_manager
+        self._mcp_host = mcp_host
+        self._mcp_port = mcp_port
         self._active_agents: dict[str, WebShopPlusAgent] = {}
         self._simple_task_states: dict[str, dict] = {}  # Track simple echo tasks
 
@@ -470,3 +491,137 @@ class WebShopPlusExecutor(AgentExecutor):
             role=Role.agent,
             parts=[TextPart(text=text)],
         )
+
+    def _get_mcp_base_url(self) -> str:
+        """Get the base URL for MCP endpoints.
+
+        Returns:
+            Base URL like "http://localhost:8000/mcp"
+        """
+        return f"http://{self._mcp_host}:{self._mcp_port}/mcp"
+
+    async def create_mcp_session(
+        self,
+        goal: str,
+        budget: float,
+        constraints: Optional[list[str]] = None,
+        max_turns: int = 30,
+    ) -> tuple[str, str]:
+        """Create an MCP session for a task.
+
+        Args:
+            goal: The shopping task goal.
+            budget: Maximum allowed spending.
+            constraints: Optional list of constraints.
+            max_turns: Maximum number of turns.
+
+        Returns:
+            Tuple of (session_id, mcp_uri).
+
+        Raises:
+            RuntimeError: If SessionManager is not configured.
+        """
+        if self._session_manager is None:
+            raise RuntimeError("SessionManager not configured for MCP sessions")
+
+        session_id = str(uuid.uuid4())
+
+        await self._session_manager.create_session(
+            session_id=session_id,
+            goal=goal,
+            budget=budget,
+            constraints=constraints or [],
+            max_turns=max_turns,
+        )
+
+        mcp_uri = f"{self._get_mcp_base_url()}/{session_id}"
+
+        logger.info(
+            "Created MCP session",
+            session_id=session_id,
+            mcp_uri=mcp_uri,
+            goal=goal[:50],
+            budget=budget,
+        )
+
+        return session_id, mcp_uri
+
+    def build_mcp_kickoff(
+        self,
+        goal: str,
+        budget: float,
+        constraints: list[str],
+        mcp_uri: str,
+    ) -> dict[str, Any]:
+        """Build a kickoff message with MCP resource for purple agents.
+
+        This creates the standardized kickoff format that purple agents
+        use to receive task details and the MCP endpoint for tool execution.
+
+        Args:
+            goal: The shopping task goal.
+            budget: Maximum allowed spending.
+            constraints: List of constraints.
+            mcp_uri: The MCP endpoint URI for this session.
+
+        Returns:
+            Kickoff dict ready to be serialized to JSON.
+        """
+        return {
+            "goal": goal,
+            "budget": budget,
+            "constraints": constraints,
+            "resources": [
+                {
+                    "type": "mcp",
+                    "uri": mcp_uri,
+                    "description": "WebShop MCP server for search, click, and checkout tools",
+                }
+            ],
+        }
+
+    async def cleanup_mcp_session(self, session_id: str) -> bool:
+        """Clean up an MCP session after completion.
+
+        Args:
+            session_id: The session ID to clean up.
+
+        Returns:
+            True if session was cleaned up, False if not found.
+        """
+        if self._session_manager is None:
+            return False
+
+        result = await self._session_manager.cleanup_session(session_id)
+        if result:
+            logger.info("Cleaned up MCP session", session_id=session_id)
+        return result
+
+    async def get_mcp_session_result(self, session_id: str) -> Optional[dict[str, Any]]:
+        """Get the result from a completed MCP session.
+
+        Args:
+            session_id: The session ID.
+
+        Returns:
+            The session result dict, or None if not found/not completed.
+        """
+        if self._session_manager is None:
+            return None
+
+        server = await self._session_manager.get_session(session_id)
+        if server is None:
+            return None
+
+        if not server.is_completed():
+            return None
+
+        return server.get_final_result()
+
+    def has_mcp_support(self) -> bool:
+        """Check if MCP support is enabled.
+
+        Returns:
+            True if SessionManager is configured.
+        """
+        return self._session_manager is not None

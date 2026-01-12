@@ -15,9 +15,9 @@ from unittest.mock import patch
 
 import pytest
 
-from src.mcp.session_manager import SessionManager
-from src.mcp.session_state import SessionState
-from src.mcp.server import WebShopMCPServer
+from src.webshop_mcp.session_manager import SessionManager
+from src.webshop_mcp.session_state import SessionState
+from src.webshop_mcp.server import WebShopMCPServer
 
 
 class TestSessionCreation:

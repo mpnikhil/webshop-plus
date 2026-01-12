@@ -336,5 +336,279 @@ class TestExecutorIntegration:
         assert artifact_events[0].artifact.name == "assessment_results"
 
 
+# =============================================================================
+# MCP Integration Tests (AAA Stage 7)
+# =============================================================================
+
+
+class TestExecutorMCPSupport:
+    """Tests for MCP session management in WebShopPlusExecutor."""
+
+    def test_has_mcp_support_false_by_default(self):
+        """Should return False when no SessionManager configured."""
+        executor = WebShopPlusExecutor()
+        assert executor.has_mcp_support() is False
+
+    def test_has_mcp_support_true_with_session_manager(self):
+        """Should return True when SessionManager is configured."""
+        from src.webshop_mcp import SessionManager
+
+        session_manager = SessionManager()
+        executor = WebShopPlusExecutor(session_manager=session_manager)
+        assert executor.has_mcp_support() is True
+
+    def test_get_mcp_base_url(self):
+        """Should return correct MCP base URL."""
+        executor = WebShopPlusExecutor(mcp_host="myhost", mcp_port=9000)
+        assert executor._get_mcp_base_url() == "http://myhost:9000/mcp"
+
+    def test_build_mcp_kickoff(self):
+        """Should build correct kickoff dict with MCP resource."""
+        executor = WebShopPlusExecutor()
+
+        kickoff = executor.build_mcp_kickoff(
+            goal="Find running shoes under $50",
+            budget=50.0,
+            constraints=["no synthetic"],
+            mcp_uri="http://localhost:8000/mcp/session123",
+        )
+
+        assert kickoff["goal"] == "Find running shoes under $50"
+        assert kickoff["budget"] == 50.0
+        assert kickoff["constraints"] == ["no synthetic"]
+        assert len(kickoff["resources"]) == 1
+        assert kickoff["resources"][0]["type"] == "mcp"
+        assert kickoff["resources"][0]["uri"] == "http://localhost:8000/mcp/session123"
+
+    @pytest.mark.asyncio
+    async def test_create_mcp_session(self):
+        """Should create MCP session and return session_id and URI."""
+        from src.webshop_mcp import SessionManager
+
+        session_manager = SessionManager()
+        executor = WebShopPlusExecutor(
+            session_manager=session_manager,
+            mcp_host="localhost",
+            mcp_port=8000,
+        )
+
+        session_id, mcp_uri = await executor.create_mcp_session(
+            goal="Find shoes",
+            budget=100.0,
+            constraints=["waterproof"],
+            max_turns=20,
+        )
+
+        assert session_id is not None
+        assert mcp_uri.startswith("http://localhost:8000/mcp/")
+        assert session_id in mcp_uri
+
+        # Verify session was created
+        session = await session_manager.get_session(session_id)
+        assert session is not None
+        assert session.state.goal == "Find shoes"
+        assert session.state.budget == 100.0
+        assert session.state.constraints == ["waterproof"]
+        assert session.state.max_turns == 20
+
+    @pytest.mark.asyncio
+    async def test_create_mcp_session_without_manager_raises(self):
+        """Should raise RuntimeError when no SessionManager configured."""
+        executor = WebShopPlusExecutor()
+
+        with pytest.raises(RuntimeError, match="SessionManager not configured"):
+            await executor.create_mcp_session(
+                goal="Find shoes",
+                budget=100.0,
+            )
+
+    @pytest.mark.asyncio
+    async def test_cleanup_mcp_session(self):
+        """Should clean up MCP session."""
+        from src.webshop_mcp import SessionManager
+
+        session_manager = SessionManager()
+        executor = WebShopPlusExecutor(session_manager=session_manager)
+
+        # Create a session
+        session_id, _ = await executor.create_mcp_session(
+            goal="Find shoes",
+            budget=100.0,
+        )
+
+        # Verify it exists
+        assert await session_manager.get_session(session_id) is not None
+
+        # Clean it up
+        result = await executor.cleanup_mcp_session(session_id)
+        assert result is True
+
+        # Verify it's gone
+        assert await session_manager.get_session(session_id) is None
+
+    @pytest.mark.asyncio
+    async def test_cleanup_mcp_session_nonexistent(self):
+        """Should return False when cleaning up nonexistent session."""
+        from src.webshop_mcp import SessionManager
+
+        session_manager = SessionManager()
+        executor = WebShopPlusExecutor(session_manager=session_manager)
+
+        result = await executor.cleanup_mcp_session("nonexistent-session")
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_get_mcp_session_result_not_completed(self):
+        """Should return None for incomplete session."""
+        from src.webshop_mcp import SessionManager
+
+        session_manager = SessionManager()
+        executor = WebShopPlusExecutor(session_manager=session_manager)
+
+        session_id, _ = await executor.create_mcp_session(
+            goal="Find shoes",
+            budget=100.0,
+        )
+
+        # Session not completed yet
+        result = await executor.get_mcp_session_result(session_id)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_mcp_session_result_completed(self):
+        """Should return result for completed session."""
+        from src.webshop_mcp import SessionManager
+
+        session_manager = SessionManager()
+        executor = WebShopPlusExecutor(session_manager=session_manager)
+
+        session_id, _ = await executor.create_mcp_session(
+            goal="Find shoes",
+            budget=100.0,
+        )
+
+        # Complete the session manually
+        session = await session_manager.get_session(session_id)
+        session.state.mark_completed("checkout")
+        final_result = {"terminated": True, "reason": "checkout", "score": 1.0}
+        session.signal_completion(final_result)
+
+        # Now get result
+        result = await executor.get_mcp_session_result(session_id)
+        assert result is not None
+        assert result["terminated"] is True
+        assert result["reason"] == "checkout"
+
+
+class TestMCPServerWaitForCompletion:
+    """Tests for WebShopMCPServer.wait_for_completion()."""
+
+    @pytest.mark.asyncio
+    async def test_wait_for_completion_already_completed(self):
+        """Should return immediately if already completed."""
+        from src.webshop_mcp import SessionState, WebShopMCPServer
+
+        state = SessionState(
+            session_id="test",
+            goal="Find shoes",
+            budget=100.0,
+        )
+        server = WebShopMCPServer(state)
+
+        # Mark as completed
+        state.mark_completed("checkout")
+        server.signal_completion({"terminated": True, "score": 1.0})
+
+        # Should return immediately
+        result = await asyncio.wait_for(server.wait_for_completion(), timeout=1.0)
+        assert result["terminated"] is True
+        assert result["score"] == 1.0
+
+    @pytest.mark.asyncio
+    async def test_wait_for_completion_timeout(self):
+        """Should raise TimeoutError if not completed in time."""
+        from src.webshop_mcp import SessionState, WebShopMCPServer
+
+        state = SessionState(
+            session_id="test",
+            goal="Find shoes",
+            budget=100.0,
+        )
+        server = WebShopMCPServer(state)
+
+        with pytest.raises(asyncio.TimeoutError):
+            await server.wait_for_completion(timeout=0.1)
+
+    @pytest.mark.asyncio
+    async def test_wait_for_completion_signaled(self):
+        """Should return when completion is signaled."""
+        from src.webshop_mcp import SessionState, WebShopMCPServer
+
+        state = SessionState(
+            session_id="test",
+            goal="Find shoes",
+            budget=100.0,
+        )
+        server = WebShopMCPServer(state)
+
+        # Signal completion in background
+        async def signal_later():
+            await asyncio.sleep(0.1)
+            state.mark_completed("checkout")
+            server.signal_completion({"terminated": True, "score": 1.0})
+
+        asyncio.create_task(signal_later())
+
+        # Wait for completion
+        result = await server.wait_for_completion(timeout=1.0)
+        assert result["terminated"] is True
+
+    def test_is_completed(self):
+        """Should return correct completion status."""
+        from src.webshop_mcp import SessionState, WebShopMCPServer
+
+        state = SessionState(
+            session_id="test",
+            goal="Find shoes",
+            budget=100.0,
+        )
+        server = WebShopMCPServer(state)
+
+        assert server.is_completed() is False
+
+        state.mark_completed("checkout")
+        assert server.is_completed() is True
+
+    def test_get_final_result_before_completion(self):
+        """Should return None before completion."""
+        from src.webshop_mcp import SessionState, WebShopMCPServer
+
+        state = SessionState(
+            session_id="test",
+            goal="Find shoes",
+            budget=100.0,
+        )
+        server = WebShopMCPServer(state)
+
+        assert server.get_final_result() is None
+
+    def test_get_final_result_after_completion(self):
+        """Should return result after completion."""
+        from src.webshop_mcp import SessionState, WebShopMCPServer
+
+        state = SessionState(
+            session_id="test",
+            goal="Find shoes",
+            budget=100.0,
+        )
+        server = WebShopMCPServer(state)
+
+        expected = {"terminated": True, "score": 0.8}
+        server.signal_completion(expected)
+
+        result = server.get_final_result()
+        assert result == expected
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

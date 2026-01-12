@@ -4,6 +4,7 @@ A2A server for WebShop+ green agent using the official a2a-sdk.
 This module implements the A2A protocol server with:
 - Agent card endpoint at /.well-known/agent-card.json
 - A2A message handling endpoint at /a2a
+- MCP tool endpoint at /mcp/{session_id} for session-scoped tool execution
 - SSE streaming for real-time task updates
 - SDK-managed request handling and task lifecycle
 
@@ -19,8 +20,8 @@ import uvicorn
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
-from starlette.responses import JSONResponse
-from starlette.routing import Route
+from starlette.responses import JSONResponse, Response
+from starlette.routing import Mount, Route
 
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
@@ -34,8 +35,111 @@ from a2a.types import (
 
 from src.a2a_executor import WebShopPlusExecutor
 from src.agent import AgentConfig
+from src.webshop_mcp import SessionManager
 
 logger = structlog.get_logger()
+
+
+# =============================================================================
+# MCP Route Handler
+# =============================================================================
+
+
+class MCPRouteHandler:
+    """ASGI handler that routes MCP requests to session-scoped MCP servers.
+
+    This handler extracts the session_id from the URL path and delegates
+    the request to the corresponding session's MCP application.
+
+    Example:
+        handler = MCPRouteHandler(session_manager)
+        # Requests to /mcp/{session_id}/* are routed to the session's MCP app
+    """
+
+    def __init__(self, session_manager: SessionManager):
+        """Initialize the MCP route handler.
+
+        Args:
+            session_manager: SessionManager instance for looking up sessions.
+        """
+        self.session_manager = session_manager
+
+    async def __call__(self, scope, receive, send) -> None:
+        """ASGI entrypoint for MCP requests.
+
+        Args:
+            scope: ASGI scope dict.
+            receive: ASGI receive callable.
+            send: ASGI send callable.
+        """
+        if scope["type"] != "http":
+            return
+
+        # Extract session_id from path: /mcp/{session_id}/...
+        path = scope.get("path", "")
+        parts = path.split("/mcp/")
+
+        if len(parts) < 2:
+            await self._send_error(send, 400, "Invalid MCP path")
+            return
+
+        # Get session_id (may have additional path segments after it)
+        session_parts = parts[1].split("/", 1)
+        session_id = session_parts[0]
+
+        if not session_id:
+            await self._send_error(send, 400, "Missing session_id in path")
+            return
+
+        # Look up session
+        session = await self.session_manager.get_session(session_id)
+
+        if session is None:
+            logger.warning("MCP session not found", session_id=session_id)
+            await self._send_error(send, 404, f"Session '{session_id}' not found")
+            return
+
+        # Get the session's MCP app and delegate
+        mcp_app = session.get_app()
+
+        # Adjust the path for the MCP app (remove /mcp/{session_id} prefix)
+        remaining_path = "/" + session_parts[1] if len(session_parts) > 1 else "/"
+        modified_scope = dict(scope)
+        modified_scope["path"] = remaining_path
+
+        logger.debug(
+            "Routing MCP request",
+            session_id=session_id,
+            original_path=path,
+            modified_path=remaining_path,
+        )
+
+        await mcp_app(modified_scope, receive, send)
+
+    async def _send_error(self, send, status: int, message: str) -> None:
+        """Send an HTTP error response.
+
+        Args:
+            send: ASGI send callable.
+            status: HTTP status code.
+            message: Error message.
+        """
+        import json
+
+        body = json.dumps({"error": message}).encode()
+
+        await send({
+            "type": "http.response.start",
+            "status": status,
+            "headers": [
+                [b"content-type", b"application/json"],
+                [b"content-length", str(len(body)).encode()],
+            ],
+        })
+        await send({
+            "type": "http.response.body",
+            "body": body,
+        })
 
 
 # =============================================================================
@@ -258,25 +362,42 @@ async def health_check(request):
 # =============================================================================
 
 
-def create_app(card_url: str = "http://localhost:8001") -> Starlette:
+def create_app(
+    card_url: str = "http://localhost:8001",
+    host: str = "localhost",
+    port: int = 8000,
+) -> Starlette:
     """Create the SDK-based A2A Starlette application.
 
     Args:
         card_url: Base URL for the agent card.
+        host: Host for MCP URI generation.
+        port: Port for MCP URI generation.
 
     Returns:
-        A Starlette application with A2A routes.
+        A Starlette application with A2A and MCP routes.
     """
+    # Create session manager for MCP sessions
+    session_manager = SessionManager(max_sessions=100, session_ttl=3600)
+
     # Create SDK components
     agent_card = create_sdk_agent_card(card_url)
     task_store = InMemoryTaskStore()
-    executor = WebShopPlusExecutor(agent_config=AgentConfig())
+    executor = WebShopPlusExecutor(
+        agent_config=AgentConfig(),
+        session_manager=session_manager,
+        mcp_host=host,
+        mcp_port=port,
+    )
 
     # Create the SDK request handler
     request_handler = DefaultRequestHandler(
         agent_executor=executor,
         task_store=task_store,
     )
+
+    # Create MCP route handler
+    mcp_handler = MCPRouteHandler(session_manager)
 
     # Create the A2A Starlette application builder
     a2a_builder = A2AStarletteApplication(
@@ -295,16 +416,23 @@ def create_app(card_url: str = "http://localhost:8001") -> Starlette:
         ),
     ]
 
-    # Create routes including health check
+    # Create routes including health check and MCP mount
     routes = [
         Route("/health", health_check, methods=["GET"]),
+        Mount("/mcp", app=mcp_handler),
     ]
 
     # Create lifespan context manager for startup/shutdown logging
     @asynccontextmanager
     async def lifespan(app):
-        logger.info("Starting WebShop+ A2A server (SDK)", card_url=card_url)
+        logger.info(
+            "Starting WebShop+ A2A server (SDK)",
+            card_url=card_url,
+            mcp_base=f"http://{host}:{port}/mcp",
+        )
         yield
+        # Cleanup session manager on shutdown
+        await session_manager.cleanup_all()
         logger.info("Shutting down WebShop+ A2A server (SDK)")
 
     app = Starlette(
@@ -397,7 +525,7 @@ def main() -> None:
     )
 
     # Create and run the app
-    app = create_app(card_url=card_url)
+    app = create_app(card_url=card_url, host=args.host, port=args.port)
 
     uvicorn.run(
         app,

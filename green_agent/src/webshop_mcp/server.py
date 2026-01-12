@@ -8,6 +8,7 @@ subsequent interactions. The server is session-scoped - each assessment
 session gets its own server instance with isolated state.
 """
 
+import asyncio
 from typing import Any, Protocol
 
 from bs4 import BeautifulSoup
@@ -80,6 +81,8 @@ class WebShopMCPServer:
         self._webshop = webshop
         self._webshop_initialized = False
         self.mcp = FastMCP(f"WebShop-{state.session_id}")
+        self._completion_event: asyncio.Event | None = None
+        self._final_result: dict[str, Any] | None = None
         self._register_tools()
 
     def _get_webshop(self) -> WebShopInterface:
@@ -111,7 +114,7 @@ class WebShopMCPServer:
             Evaluation dict with terminated=True and score=0.2.
         """
         self.state.mark_completed("max_turns_exceeded")
-        return {
+        result = {
             "terminated": True,
             "reason": "max_turns_exceeded",
             "turns_used": self.state.turn_count,
@@ -120,6 +123,8 @@ class WebShopMCPServer:
             "cart_total": self.state.get_cart_total(),
             "score": 0.2,
         }
+        self.signal_completion(result)
+        return result
 
     def _parse_search_results(self, html: str) -> list[dict[str, Any]]:
         """Parse search results HTML to extract product info.
@@ -704,6 +709,9 @@ class WebShopMCPServer:
             # Add history summary for evaluation context
             evaluation["history_length"] = len(server.state.history)
 
+            # Signal completion to any waiters
+            server.signal_completion(evaluation)
+
             return evaluation
 
     def get_app(self) -> Any:
@@ -716,3 +724,58 @@ class WebShopMCPServer:
             ASGI application that handles MCP requests.
         """
         return self.mcp.streamable_http_app()
+
+    async def wait_for_completion(self, timeout: float | None = None) -> dict[str, Any]:
+        """Wait for the session to complete.
+
+        This method blocks until the session completes (via checkout or max_turns),
+        or until the timeout is reached.
+
+        Args:
+            timeout: Maximum time to wait in seconds. None means wait forever.
+
+        Returns:
+            The final evaluation result from the session.
+
+        Raises:
+            asyncio.TimeoutError: If timeout is reached before completion.
+        """
+        if self._completion_event is None:
+            self._completion_event = asyncio.Event()
+
+        # If already completed, return immediately
+        if self.state.completed and self._final_result is not None:
+            return self._final_result
+
+        # Wait for completion signal
+        await asyncio.wait_for(self._completion_event.wait(), timeout=timeout)
+
+        return self._final_result or self.state.get_summary()
+
+    def signal_completion(self, result: dict[str, Any]) -> None:
+        """Signal that the session has completed.
+
+        This should be called when checkout() or max_turns is triggered.
+
+        Args:
+            result: The final evaluation result.
+        """
+        self._final_result = result
+        if self._completion_event is not None:
+            self._completion_event.set()
+
+    def is_completed(self) -> bool:
+        """Check if the session has completed.
+
+        Returns:
+            True if the session has ended.
+        """
+        return self.state.completed
+
+    def get_final_result(self) -> dict[str, Any] | None:
+        """Get the final result if session is completed.
+
+        Returns:
+            The final evaluation result, or None if not completed.
+        """
+        return self._final_result

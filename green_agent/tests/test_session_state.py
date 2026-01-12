@@ -10,7 +10,7 @@ Tests cover:
 """
 
 import pytest
-from src.mcp.session_state import SessionState
+from src.webshop_mcp.session_state import SessionState
 
 
 class TestSessionStateInitialization:
