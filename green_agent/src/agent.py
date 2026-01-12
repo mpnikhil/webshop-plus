@@ -5,12 +5,16 @@ This module provides the main orchestration logic for running assessments:
 - WebShopPlusAgent: Main agent class that orchestrates task execution
 - Task dispatch loop: send task -> receive action -> step -> send observation -> evaluate
 - Result aggregation and reporting
+
+Supports two execution modes:
+- Legacy mode: Multi-step A2A interaction using Executor
+- MCP mode: Single kickoff with PurpleAgentClient + MCP tools
 """
 
 import asyncio
 import uuid
 from dataclasses import dataclass
-from typing import Any, AsyncGenerator, Callable, Optional
+from typing import Any, AsyncGenerator, Callable, Optional, TYPE_CHECKING
 
 import structlog
 
@@ -27,17 +31,23 @@ from .models import (
     AgentMemory,
     AssessmentConfig,
     AssessmentResults,
+    BudgetConstrainedTask,
     EvaluationResult,
     ErrorRecoveryTask,
+    NegativeConstraintTask,
     PreferenceMemoryTask,
     SessionState,
     Task,
     TaskType,
     TaskUpdate,
 )
+from .purple_client import PurpleAgentClient, TaskResult, PurpleAgentClientError
 from .state_manager import StateManager
 from .task_generator import TaskGenerator
 from .webshop_wrapper import WebShopWrapper
+
+if TYPE_CHECKING:
+    from .webshop_mcp import SessionManager
 
 logger = structlog.get_logger()
 
@@ -52,6 +62,11 @@ class AgentConfig:
     max_retries_per_action: int = 3
     use_llm_evaluation: bool = True
     webshop_mode: str = "preview"
+    # MCP configuration
+    use_mcp: bool = False  # Enable MCP-based execution
+    mcp_host: str = "localhost"
+    mcp_port: int = 8000
+    default_budget: float = 100.0  # Default budget when not specified in task
 
 
 @dataclass
@@ -95,6 +110,7 @@ class WebShopPlusAgent:
         webshop: Optional[WebShopWrapper] = None,
         evaluator: Optional[Evaluator] = None,
         llm_client: Optional[LLMClient] = None,
+        session_manager: Optional["SessionManager"] = None,
     ):
         """
         Initialize the WebShopPlusAgent.
@@ -106,6 +122,7 @@ class WebShopPlusAgent:
             webshop: WebShop wrapper instance (creates default if None).
             evaluator: Evaluator instance (creates default if None).
             llm_client: LLM client for evaluation (creates default if None).
+            session_manager: MCP session manager (optional, enables MCP mode).
         """
         self.config = config or AgentConfig()
 
@@ -116,6 +133,7 @@ class WebShopPlusAgent:
         self._evaluator = evaluator
         self._llm_client = llm_client
         self._executor: Optional[Executor] = None
+        self._session_manager = session_manager
 
         # Runtime state
         self._initialized = False
@@ -459,14 +477,72 @@ class WebShopPlusAgent:
         # Limit to requested number
         return all_tasks[:num_tasks]
 
-    async def _execute_task(
+    def _extract_task_kickoff_data(self, task: Task) -> tuple[str, float, list[str]]:
+        """Extract goal, budget, and constraints from a task.
+
+        Args:
+            task: The task to extract data from.
+
+        Returns:
+            Tuple of (goal, budget, constraints).
+        """
+        goal = task.instruction
+
+        # Extract budget from task constraints if available
+        budget = self.config.default_budget
+        constraints: list[str] = []
+
+        if isinstance(task, BudgetConstrainedTask):
+            budget = task.constraints.budget
+            # Convert required items to constraint strings
+            for item in task.constraints.required_items:
+                if item.category:
+                    constraints.append(f"category: {item.category}")
+                if item.attributes:
+                    for key, value in item.attributes.items():
+                        constraints.append(f"{key}: {value}")
+            if task.constraints.optimization_goal:
+                constraints.append(f"optimization: {task.constraints.optimization_goal.value}")
+
+        elif isinstance(task, NegativeConstraintTask):
+            budget = task.constraints.budget if task.constraints.budget else self.config.default_budget
+            # Add forbidden attributes as constraints (list of strings)
+            if task.constraints.forbidden_attributes:
+                for attr in task.constraints.forbidden_attributes:
+                    constraints.append(f"NOT: {attr}")
+            # Add forbidden terms
+            if task.constraints.forbidden_terms:
+                for term in task.constraints.forbidden_terms:
+                    constraints.append(f"FORBIDDEN: {term}")
+            # Add required attributes (list of strings)
+            if task.constraints.required_attributes:
+                for attr in task.constraints.required_attributes:
+                    constraints.append(f"REQUIRE: {attr}")
+
+        return goal, budget, constraints
+
+    def _get_mcp_uri(self, session_id: str) -> str:
+        """Build the MCP URI for a session.
+
+        Args:
+            session_id: The MCP session ID.
+
+        Returns:
+            Full MCP URI for the session.
+        """
+        return f"http://{self.config.mcp_host}:{self.config.mcp_port}/mcp/{session_id}"
+
+    async def _dispatch_task_to_purple(
         self,
         task: Task,
         shopper_endpoint: str,
         agent_id: str,
     ) -> TaskExecutionResult:
-        """
-        Execute a single task.
+        """Execute a task using MCP-based flow.
+
+        This method uses PurpleAgentClient to send a single kickoff message
+        with an MCP URI. The purple agent then handles all shopping steps
+        via MCP tool calls.
 
         Args:
             task: The task to execute.
@@ -476,6 +552,134 @@ class WebShopPlusAgent:
         Returns:
             TaskExecutionResult with evaluation.
         """
+        result = TaskExecutionResult(
+            task_id=task.task_id,
+            session_id="",
+        )
+
+        # Create session for tracking
+        session = self.state_manager.create_session(task.task_id, agent_id)
+        result.session_id = session.session_id
+
+        # Get agent memory for preference tasks
+        memory: Optional[AgentMemory] = None
+        if isinstance(task, PreferenceMemoryTask):
+            memory = self.state_manager.get_agent_memory(agent_id)
+
+        try:
+            # Extract task data for kickoff
+            goal, budget, constraints = self._extract_task_kickoff_data(task)
+
+            # Create MCP session if session manager is available
+            mcp_session_id: Optional[str] = None
+            mcp_uri: Optional[str] = None
+
+            if self._session_manager is not None:
+                mcp_session_id = str(uuid.uuid4())
+                await self._session_manager.create_session(
+                    session_id=mcp_session_id,
+                    goal=goal,
+                    budget=budget,
+                    constraints=constraints,
+                    max_turns=self.config.max_actions_per_task,
+                )
+                mcp_uri = self._get_mcp_uri(mcp_session_id)
+
+                logger.info(
+                    "Created MCP session for task",
+                    task_id=task.task_id,
+                    mcp_session_id=mcp_session_id,
+                    mcp_uri=mcp_uri,
+                )
+
+            # Send task to purple agent via PurpleAgentClient
+            async with PurpleAgentClient(shopper_endpoint) as client:
+                task_result = await client.send_task(
+                    goal=goal,
+                    budget=budget,
+                    constraints=constraints,
+                    mcp_uri=mcp_uri,
+                )
+
+                if task_result.success:
+                    result.completed = True
+                    result.total_reward = 1.0  # MCP tasks report completion as success
+
+                    # Extract result data if available
+                    if task_result.result_data:
+                        # Record result in session for evaluation
+                        if "actions" in task_result.result_data:
+                            result.actions_taken = len(task_result.result_data["actions"])
+                        if "turns_used" in task_result.result_data:
+                            result.actions_taken = task_result.result_data["turns_used"]
+
+                    logger.info(
+                        "MCP task completed successfully",
+                        task_id=task.task_id,
+                        result_data=task_result.result_data,
+                    )
+                else:
+                    result.error = task_result.error or "Task failed"
+                    logger.warning(
+                        "MCP task failed",
+                        task_id=task.task_id,
+                        error=task_result.error,
+                    )
+
+            # Get final result from MCP session if available
+            if mcp_session_id and self._session_manager:
+                mcp_server = await self._session_manager.get_session(mcp_session_id)
+                if mcp_server and mcp_server.is_completed():
+                    mcp_result = mcp_server.get_final_result()
+                    if mcp_result:
+                        # Merge MCP result into task execution result
+                        if "turns_used" in mcp_result:
+                            result.actions_taken = mcp_result["turns_used"]
+                        if "success" in mcp_result:
+                            result.completed = mcp_result["success"]
+                        if "reward" in mcp_result:
+                            result.total_reward = mcp_result["reward"]
+
+                # Clean up MCP session
+                await self._session_manager.cleanup_session(mcp_session_id)
+
+        except PurpleAgentClientError as e:
+            result.error = f"Purple agent error: {str(e)}"
+            logger.error("PurpleAgentClient error", task_id=task.task_id, error=str(e))
+        except asyncio.TimeoutError:
+            result.timed_out = True
+            result.error = "Task execution timed out"
+        except Exception as e:
+            result.error = f"Task execution error: {str(e)}"
+            logger.error("MCP task execution error", task_id=task.task_id, error=str(e))
+
+        return self._finalize_task(result, session, task, memory)
+
+    async def _execute_task(
+        self,
+        task: Task,
+        shopper_endpoint: str,
+        agent_id: str,
+    ) -> TaskExecutionResult:
+        """
+        Execute a single task.
+
+        Dispatches to MCP-based execution if use_mcp is enabled,
+        otherwise uses the legacy multi-step A2A interaction.
+
+        Args:
+            task: The task to execute.
+            shopper_endpoint: The purple agent's endpoint.
+            agent_id: The agent's ID for memory tracking.
+
+        Returns:
+            TaskExecutionResult with evaluation.
+        """
+        # Dispatch to MCP path if enabled
+        if self.config.use_mcp:
+            return await self._dispatch_task_to_purple(task, shopper_endpoint, agent_id)
+
+        # Legacy multi-step A2A execution
         result = TaskExecutionResult(
             task_id=task.task_id,
             session_id="",
