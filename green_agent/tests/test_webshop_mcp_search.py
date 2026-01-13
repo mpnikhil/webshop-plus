@@ -97,24 +97,36 @@ def cleanup_global_state():
 
 
 def create_search_results_html(products: list[dict]) -> str:
-    """Create mock HTML for search results.
+    """Create mock [SEP]-delimited text for search results.
+    
+    WebShop text environment returns [SEP]-delimited format, not HTML.
+    Format: Instruction [SEP] ... [SEP] ASIN [SEP] Name [SEP] Price [SEP] ...
 
     Args:
         products: List of dicts with 'asin', 'name', 'price' keys.
 
     Returns:
-        HTML string mimicking WebShop search results.
+        [SEP]-delimited string mimicking WebShop search results.
     """
-    items = []
+    parts = [
+        "Instruction: Find running shoes",
+        "Back to Search",
+        "Page 1 (Total results: {})".format(len(products)),
+    ]
+    
+    # Add products in [SEP] format: ASIN [SEP] Name [SEP] Price
     for p in products:
-        items.append(f'''
-        <div class="list-group-item">
-            <h4>{p["name"]}</h4>
-            <h5>${p["price"]:.2f}</h5>
-            <a class="product-link">{p["asin"]}</a>
-        </div>
-        ''')
-    return f'<div class="list-group">{"".join(items)}</div>'
+        parts.extend([
+            p["asin"],
+            p["name"],
+            "${:.2f}".format(p["price"]),
+        ])
+    
+    # Add navigation if multiple products
+    if len(products) > 0:
+        parts.append("Next >")
+    
+    return " [SEP] ".join(parts)
 
 
 def setup_session(
@@ -153,8 +165,8 @@ class TestSearchReturnsProductsWithIds:
     def test_search_returns_products_list(self):
         """Search should return a products list."""
         products = [
-            {"asin": "B001", "name": "Running Shoes", "price": 49.99},
-            {"asin": "B002", "name": "Trail Runners", "price": 59.99},
+            {"asin": "B001234567", "name": "Running Shoes", "price": 49.99},
+            {"asin": "B002345678", "name": "Trail Runners", "price": 59.99},
         ]
         html = create_search_results_html(products)
         webshop = MockWebShop(search_results_html=html)
@@ -171,9 +183,9 @@ class TestSearchReturnsProductsWithIds:
     def test_search_products_have_element_ids(self):
         """Each product should have an element ID like 'p1', 'p2'."""
         products = [
-            {"asin": "B001", "name": "Running Shoes", "price": 49.99},
-            {"asin": "B002", "name": "Trail Runners", "price": 59.99},
-            {"asin": "B003", "name": "Sneakers", "price": 39.99},
+            {"asin": "B001234567", "name": "Running Shoes", "price": 49.99},
+            {"asin": "B002345678", "name": "Trail Runners", "price": 59.99},
+            {"asin": "B003456789", "name": "Sneakers", "price": 39.99},
         ]
         html = create_search_results_html(products)
         webshop = MockWebShop(search_results_html=html)
@@ -191,7 +203,7 @@ class TestSearchReturnsProductsWithIds:
     def test_search_products_have_name_and_price(self):
         """Each product should include name and price."""
         products = [
-            {"asin": "B001", "name": "Running Shoes", "price": 49.99},
+            {"asin": "B001234567", "name": "Running Shoes", "price": 49.99},
         ]
         html = create_search_results_html(products)
         webshop = MockWebShop(search_results_html=html)
@@ -210,7 +222,7 @@ class TestSearchReturnsProductsWithIds:
     def test_search_uses_webshop_prices_when_available(self):
         """Search should use product_prices from webshop if available."""
         products = [
-            {"asin": "B001", "name": "Running Shoes", "price": 49.99},
+            {"asin": "B001234567", "name": "Running Shoes", "price": 49.99},
         ]
         html = create_search_results_html(products)
         # WebShop has a different price for this ASIN
@@ -235,7 +247,7 @@ class TestSearchUpdatesVisibleElements:
     def test_search_updates_visible_elements(self):
         """Search should update state.visible_elements with product info."""
         products = [
-            {"asin": "B001", "name": "Running Shoes", "price": 49.99},
+            {"asin": "B001234567", "name": "Running Shoes", "price": 49.99},
         ]
         html = create_search_results_html(products)
         webshop = MockWebShop(search_results_html=html)
@@ -253,7 +265,7 @@ class TestSearchUpdatesVisibleElements:
     def test_search_clears_previous_visible_elements(self):
         """New search should clear previous visible elements."""
         products = [
-            {"asin": "B001", "name": "Running Shoes", "price": 49.99},
+            {"asin": "B001234567", "name": "Running Shoes", "price": 49.99},
         ]
         html = create_search_results_html(products)
         webshop = MockWebShop(search_results_html=html)
@@ -393,10 +405,10 @@ class TestSearchPagination:
 
     def test_search_includes_next_page_action(self):
         """Search should include next page if available."""
-        products = [{"asin": "B001", "name": "Running Shoes", "price": 49.99}]
-        html = create_search_results_html(products)
+        products = [{"asin": "B001234567", "name": "Running Shoes", "price": 49.99}]
+        sep_text = create_search_results_html(products)
         webshop = MockWebShop(
-            search_results_html=html,
+            search_results_html=sep_text,
             available_actions={"clickables": ["next >"]},
         )
 
@@ -404,17 +416,17 @@ class TestSearchPagination:
         try:
             result = search("shoes")
 
-            actions = [a["id"] for a in result.get("actions", [])]
+            actions = [a["id"] for a in result.get("available_actions", [])]
             assert "next_page" in actions
         finally:
             current_session_id.reset(token)
 
     def test_search_includes_prev_page_action(self):
         """Search should include prev page if available."""
-        products = [{"asin": "B001", "name": "Running Shoes", "price": 49.99}]
-        html = create_search_results_html(products)
+        products = [{"asin": "B001234567", "name": "Running Shoes", "price": 49.99}]
+        sep_text = create_search_results_html(products)
         webshop = MockWebShop(
-            search_results_html=html,
+            search_results_html=sep_text,
             available_actions={"clickables": ["< prev"]},
         )
 
@@ -422,7 +434,7 @@ class TestSearchPagination:
         try:
             result = search("shoes")
 
-            actions = [a["id"] for a in result.get("actions", [])]
+            actions = [a["id"] for a in result.get("available_actions", [])]
             assert "prev_page" in actions
         finally:
             current_session_id.reset(token)

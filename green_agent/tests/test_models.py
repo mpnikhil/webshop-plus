@@ -222,7 +222,8 @@ class TestNegativeConstraintTask:
                 tasks_data = json.load(f)
 
             task = NegativeConstraintTask(**tasks_data[0])
-            assert len(task.constraints.forbidden_terms) > 0
+            # Check that constraints are loaded - some tasks use forbidden_attributes instead of forbidden_terms
+            assert len(task.constraints.forbidden_attributes) > 0 or len(task.constraints.forbidden_terms) > 0
 
 
 class TestComparativeReasoningTask:

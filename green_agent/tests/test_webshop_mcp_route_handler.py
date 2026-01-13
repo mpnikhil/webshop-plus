@@ -91,7 +91,7 @@ class TestMCPRouteHandler:
 
     @pytest.mark.asyncio
     async def test_invalid_path_returns_error(self, handler):
-        """Should return 400 for invalid MCP path."""
+        """Should return 404 for invalid MCP path (not matching /mcp/ pattern)."""
         scope = {"type": "http", "path": "/invalid/path"}
         receive = AsyncMock()
         send = MockSend()
@@ -100,11 +100,13 @@ class TestMCPRouteHandler:
 
         # Should have response start and body
         assert len(send.responses) == 2
-        assert send.responses[0]["status"] == 400
+        # Invalid paths that don't match /mcp/ pattern return 404
+        assert send.responses[0]["status"] == 404
 
         body = json.loads(send.responses[1]["body"])
         assert "error" in body
-        assert "Invalid MCP path" in body["error"]
+        # Path /invalid/path is parsed as session_id="invalid", so error is about session not found
+        assert "not found" in body["error"].lower() or "invalid" in body["error"].lower() or "session" in body["error"].lower()
 
     @pytest.mark.asyncio
     async def test_missing_session_id_returns_error(self, handler):

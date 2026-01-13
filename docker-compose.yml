@@ -6,8 +6,6 @@
 #   docker compose logs -f                  # Follow logs
 #   docker compose down                     # Stop all services
 #
-# For local development with Ollama:
-#   docker compose --profile local up -d    # Includes Ollama service
 #
 # Environment variables:
 #   - Copy sample.env to .env and configure LLM settings
@@ -76,36 +74,6 @@ services:
     networks:
       - webshop-network
 
-  # Ollama (optional - for local development)
-  ollama:
-    image: ollama/ollama:latest
-    container_name: webshop-plus-ollama
-    profiles:
-      - local
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-data:/root/.ollama
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    restart: unless-stopped
-    networks:
-      - webshop-network
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-
 networks:
   webshop-network:
     driver: bridge
-
-volumes:
-  ollama-data:

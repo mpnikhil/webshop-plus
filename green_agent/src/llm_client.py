@@ -2,10 +2,10 @@
 LLM Client for WebShop+ using LiteLLM.
 
 This module provides a provider-agnostic interface to LLMs using LiteLLM.
-It supports both local Ollama models and cloud providers like Nebius.
+It supports local LM Studio models and cloud providers like Nebius.
 
 Configuration:
-    Local development: ollama/qwen3-coder:30b
+    Local development: openai/model_name (via LM Studio)
     Production: nebius/Qwen/Qwen3-32B
 """
 
@@ -19,7 +19,7 @@ from pydantic import BaseModel
 class LLMConfig(BaseModel):
     """Configuration for the LLM client."""
 
-    model: str = "ollama/qwen3-coder:30b"
+    model: str = "openai/qwen3-coder-30b-a3b-instruct-mlx"
     api_key: Optional[str] = None
     api_base: Optional[str] = None
     temperature: float = 0.7
@@ -40,11 +40,11 @@ class LLMClient:
     """
     Provider-agnostic LLM client using LiteLLM.
 
-    Supports Ollama (local) and Nebius (cloud) with automatic configuration
+    Supports LM Studio (local) and Nebius (cloud) with automatic configuration
     based on model prefix.
 
     Example:
-        >>> client = LLMClient()  # Uses default from env or ollama/qwen3-coder:30b
+        >>> client = LLMClient()  # Uses default from env or openai/model_name
         >>> response = client.complete([{"role": "user", "content": "Hello!"}])
         >>> print(response)
 
@@ -65,8 +65,8 @@ class LLMClient:
         Initialize the LLM client.
 
         Args:
-            model: Model identifier (e.g., "ollama/qwen3-coder:30b").
-                   Defaults to LLM_MODEL env var or "ollama/qwen3-coder:30b".
+            model: Model identifier (e.g., "openai/model_name" for LM Studio).
+                   Defaults to LLM_MODEL env var or "openai/qwen3-coder-30b-a3b-instruct-mlx".
             api_key: API key for cloud providers. Defaults to LLM_API_KEY env var.
             api_base: Custom API base URL. Usually auto-detected from model prefix.
             temperature: Sampling temperature (0.0-1.0). Default 0.7.
@@ -74,7 +74,7 @@ class LLMClient:
             timeout: Request timeout in seconds. Default 120.
         """
         self.config = LLMConfig(
-            model=model or os.getenv("LLM_MODEL", "ollama/qwen3-coder:30b"),
+            model=model or os.getenv("LLM_MODEL", "openai/qwen3-coder-30b-a3b-instruct-mlx"),
             api_key=api_key or os.getenv("LLM_API_KEY"),
             api_base=api_base or os.getenv("LLM_API_BASE"),
             temperature=temperature,

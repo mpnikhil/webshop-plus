@@ -121,7 +121,6 @@ class ShoppingAgent:
         Args:
             model: LLM model to use for decisions. Defaults to DEFAULT_MODEL.
                    For LM Studio, use 'openai/model_name' format.
-                   For Ollama, use 'ollama_chat/model_name' format.
             max_turns: Maximum number of turns before timeout. Defaults to DEFAULT_MAX_TURNS.
         """
         self._model = model or DEFAULT_MODEL
@@ -134,10 +133,6 @@ class ShoppingAgent:
             os.environ.setdefault("OPENAI_API_BASE", OPENAI_API_BASE)
             os.environ.setdefault("OPENAI_API_KEY", OPENAI_API_KEY)
             api_base = os.environ.get("OPENAI_API_BASE")
-        elif self._model.startswith("ollama"):
-            # Ollama API
-            os.environ.setdefault("OLLAMA_API_BASE", "http://localhost:11434")
-            api_base = os.environ.get("OLLAMA_API_BASE")
         else:
             api_base = None
 
@@ -219,7 +214,7 @@ class ShoppingAgent:
             logger.info("MCP toolset created successfully")
 
             # Create the ADK agent with LiteLLM wrapper
-            # This allows using Ollama/Qwen instead of Gemini
+            # This allows using LM Studio instead of Gemini
             logger.info("Creating LiteLLM model", model=self._model)
             print(f"[DEBUG] Creating LiteLlm model: {self._model}")
             try:

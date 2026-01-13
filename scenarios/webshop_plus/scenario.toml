@@ -33,7 +33,7 @@ url = "http://localhost:8000/.well-known/agent-card.json"
 shopping_assessment = "Evaluates shopping agents on WebShop+ tasks"
 
 [agents.green.environment]
-LLM_MODEL = "ollama/qwen3-coder:30b"
+LLM_MODEL = "openai/qwen3-coder-30b-a3b-instruct-mlx"
 LLM_TEMPERATURE = "0.2"
 LLM_MAX_TOKENS = "4096"
 
@@ -51,7 +51,7 @@ url = "http://localhost:8001/.well-known/agent-card.json"
 shopping = "Searches for and purchases products based on instructions"
 
 [agents.purple.environment]
-LLM_MODEL = "ollama/qwen3-coder:30b"
+LLM_MODEL = "openai/qwen3-coder-30b-a3b-instruct-mlx"
 LLM_TEMPERATURE = "0.2"
 LLM_MAX_TOKENS = "2048"
 
@@ -129,10 +129,9 @@ green_port = 8000
 purple_port = 8001
 webshop_mode = "preview"
 
-[local.ollama]
-model = "qwen3-coder:30b"
-fallback_model = "qwen3:32b"
-base_url = "http://localhost:11434"
+[local.lmstudio]
+model = "qwen3-coder-30b-a3b-instruct-mlx"
+base_url = "http://localhost:1234/v1"
 
 # Docker compose configuration hints
 [docker]
