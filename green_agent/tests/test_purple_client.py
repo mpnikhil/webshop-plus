@@ -102,7 +102,10 @@ class TestConnection:
 
             assert client.is_connected
             assert client.agent_card == mock_agent_card
-            MockFactory.connect.assert_called_once_with("http://localhost:8001")
+            # Verify connect was called with URL (may also have client_config)
+            MockFactory.connect.assert_called_once()
+            call_args = MockFactory.connect.call_args
+            assert call_args[0][0] == "http://localhost:8001"  # First positional arg is URL
 
     @pytest.mark.asyncio
     async def test_connect_failure(self):

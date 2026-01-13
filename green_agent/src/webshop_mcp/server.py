@@ -486,12 +486,17 @@ def _show_product_page(
 
     # Keep response compact for LLM context window
     response = {
+        "page": state.current_page,
         "product": short_name,
         "price": product.get("price", 0.0),
+        "options": options,
+        "selected_options": selected_display,
         "actions": ["add_to_cart", "back_to_results"],
         "hint": "Click add_to_cart to add this product, then checkout to complete.",
         "turn": state.turn_count,
+        "turns_remaining": state.max_turns - state.turn_count,
         "budget": state.budget,
+        "cart_total": state.get_cart_total(),
     }
 
     logger.info(
@@ -563,11 +568,13 @@ def _add_to_cart(state: SessionState, element: dict[str, Any]) -> dict[str, Any]
 
     # Keep response compact for LLM context window
     response = {
+        "page": state.current_page,
         "status": "added_to_cart",
         "cart_total": result["cart_total"],
         "budget": state.budget,
         "hint": "Now call checkout() to complete purchase.",
         "turn": state.turn_count,
+        "turns_remaining": state.max_turns - state.turn_count,
     }
 
     logger.info(
@@ -827,10 +834,14 @@ def search(query: str) -> dict[str, Any]:
         next_action = "No products found. Try a different search term."
 
     result = {
+        "page": state.current_page,
         "products": products,
+        "available_actions": actions,
         "next_action": next_action,
         "turn": state.turn_count,
+        "turns_remaining": state.max_turns - state.turn_count,
         "budget": state.budget,
+        "cart_total": state.get_cart_total(),
     }
 
     logger.info(

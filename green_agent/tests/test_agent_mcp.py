@@ -94,20 +94,19 @@ def mock_state_manager():
 @pytest.fixture
 def mock_session_manager():
     """Mock MCP session manager."""
-    manager = AsyncMock()
+    manager = MagicMock()
 
-    # Mock MCP server returned by get_session
-    mock_server = MagicMock()
-    mock_server.is_completed.return_value = True
-    mock_server.get_final_result.return_value = {
+    # Async methods
+    manager.create_session = AsyncMock(return_value=None)
+    manager.cleanup_session = AsyncMock(return_value=True)
+
+    # Sync methods
+    manager.is_session_completed.return_value = True
+    manager.get_final_result.return_value = {
         "success": True,
         "turns_used": 5,
         "reward": 0.9,
     }
-
-    manager.create_session.return_value = None
-    manager.get_session.return_value = mock_server
-    manager.cleanup_session.return_value = True
 
     return manager
 
@@ -362,16 +361,16 @@ class TestExecuteTaskMCP:
     ):
         """MCP task execution handles failure."""
         # Create mock session manager that returns failure state
-        mock_session_manager = AsyncMock()
-        mock_server = MagicMock()
-        mock_server.is_completed.return_value = True
-        mock_server.get_final_result.return_value = {
+        mock_session_manager = MagicMock()
+        # Async methods
+        mock_session_manager.create_session = AsyncMock(return_value=None)
+        mock_session_manager.cleanup_session = AsyncMock(return_value=True)
+        # Sync methods
+        mock_session_manager.is_session_completed.return_value = True
+        mock_session_manager.get_final_result.return_value = {
             "success": False,  # Failed task
             "turns_used": 2,
         }
-        mock_session_manager.create_session.return_value = None
-        mock_session_manager.get_session.return_value = mock_server
-        mock_session_manager.cleanup_session.return_value = True
 
         agent = WebShopPlusAgent(
             config=mcp_agent_config,
@@ -563,17 +562,17 @@ class TestSessionManagerIntegration:
     ):
         """MCP session result is extracted and merged."""
         # Create mock session manager with specific result
-        mock_session_manager = AsyncMock()
-        mock_server = MagicMock()
-        mock_server.is_completed.return_value = True
-        mock_server.get_final_result.return_value = {
+        mock_session_manager = MagicMock()
+        # Async methods
+        mock_session_manager.create_session = AsyncMock(return_value=None)
+        mock_session_manager.cleanup_session = AsyncMock(return_value=True)
+        # Sync methods
+        mock_session_manager.is_session_completed.return_value = True
+        mock_session_manager.get_final_result.return_value = {
             "success": True,
             "turns_used": 3,
             "reward": 0.85,
         }
-        mock_session_manager.create_session.return_value = None
-        mock_session_manager.get_session.return_value = mock_server
-        mock_session_manager.cleanup_session.return_value = True
 
         agent = WebShopPlusAgent(
             config=mcp_agent_config,

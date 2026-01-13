@@ -43,9 +43,6 @@ from .webshop_wrapper import WebShopWrapper
 if TYPE_CHECKING:
     from .webshop_mcp import SessionManager
 
-# Runtime imports for MCP session functions
-from .webshop_mcp import is_session_completed, get_final_result
-
 logger = structlog.get_logger()
 
 
@@ -438,13 +435,48 @@ class WebShopPlusAgent:
         )
 
     def _select_tasks(self, config: AssessmentConfig) -> list[Task]:
-        """Select tasks based on configuration."""
+        """Select tasks based on configuration.
+
+        Ensures balanced distribution across task types when using "all".
+        """
         task_types = config.task_types
         num_tasks = config.num_tasks
 
         if "all" in task_types:
+            # Get all available tasks
             all_tasks = self.task_generator.get_all_tasks()
+
+            # Filter out memory tasks if disabled
+            if not config.include_memory_tasks:
+                all_tasks = [
+                    t for t in all_tasks
+                    if t.task_type != TaskType.PREFERENCE_MEMORY
+                ]
+
+            # If requesting all tasks (or more than available), return all
+            if num_tasks >= len(all_tasks):
+                return all_tasks
+
+            # Otherwise, distribute evenly across types
+            all_types = list(TaskType)
+            if not config.include_memory_tasks:
+                all_types = [t for t in all_types if t != TaskType.PREFERENCE_MEMORY]
+
+            # Calculate tasks per type (round-robin)
+            tasks_per_type = num_tasks // len(all_types)
+            remainder = num_tasks % len(all_types)
+
+            selected_tasks = []
+            for i, task_type in enumerate(all_types):
+                type_tasks = self.task_generator.get_tasks_by_type(task_type)
+                # Distribute remainder across first types
+                count = tasks_per_type + (1 if i < remainder else 0)
+                selected_tasks.extend(type_tasks[:count])
+
+            # Return exactly num_tasks (in case some types have fewer tasks)
+            return selected_tasks[:num_tasks]
         else:
+            # Specific task types requested
             all_tasks = []
             for task_type in task_types:
                 try:
@@ -453,15 +485,15 @@ class WebShopPlusAgent:
                 except (ValueError, KeyError):
                     logger.warning(f"Unknown task type: {task_type}")
 
-        # Filter out memory tasks if disabled
-        if not config.include_memory_tasks:
-            all_tasks = [
-                t for t in all_tasks
-                if t.task_type != TaskType.PREFERENCE_MEMORY
-            ]
+            # Filter out memory tasks if disabled
+            if not config.include_memory_tasks:
+                all_tasks = [
+                    t for t in all_tasks
+                    if t.task_type != TaskType.PREFERENCE_MEMORY
+                ]
 
-        # Limit to requested number
-        return all_tasks[:num_tasks]
+            # Limit to requested number
+            return all_tasks[:num_tasks]
 
     def _extract_task_kickoff_data(self, task: Task) -> tuple[str, float, list[str]]:
         """Extract goal, budget, and constraints from a task.
@@ -621,7 +653,7 @@ class WebShopPlusAgent:
 
             # Get final result from MCP session if available
             if mcp_session_id and self._session_manager:
-                session_completed = is_session_completed(mcp_session_id)
+                session_completed = self._session_manager.is_session_completed(mcp_session_id)
                 logger.info(
                     "Checking MCP session completion",
                     mcp_session_id=mcp_session_id,
@@ -629,7 +661,7 @@ class WebShopPlusAgent:
                     task_id=task.task_id,
                 )
                 if session_completed:
-                    mcp_result = get_final_result(mcp_session_id)
+                    mcp_result = self._session_manager.get_final_result(mcp_session_id)
                     logger.info(
                         "Retrieved MCP final result",
                         mcp_session_id=mcp_session_id,
