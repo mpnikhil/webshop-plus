@@ -12,41 +12,108 @@ WebShop+ is a **green agent** (evaluator) for the AgentBeats platform that tests
 - **Comparative Reasoning**: Exploring options and justifying choices
 - **Error Recovery**: Fixing mistakes in existing cart state
 
+### Architecture Approach
+
+WebShop+ uses a **hybrid A2A + MCP architecture**:
+- **A2A Protocol**: Handles orchestration between green (evaluator) and purple (shopper) agents
+- **MCP Protocol**: Provides tool execution layer (search, click, checkout)
+- **Green Agent**: Hosts MCP server, monitors tool calls, evaluates performance
+- **Purple Agent**: Uses ADK (Agent Development Kit) with `McpToolset` for automatic ReAct loops
+
+This design separates concerns: A2A for task delegation and results, MCP for the actual shopping interactions.
+
 ## Architecture
+
+WebShop+ uses a **hybrid A2A + MCP architecture** where A2A handles orchestration and MCP provides the tool execution layer:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              AgentBeats Platform                              │
+│                          Assessment Flow                                     │
+│                                                                              │
+│  1. Green receives assessment_request via A2A                               │
+│  2. Green creates MCP session and sends kickoff to Purple                   │
+│  3. Purple spawns ADK agent with MCP toolset                                │
+│  4. ADK agent executes ReAct loop using MCP tools                          │
+│  5. Green monitors MCP calls for evaluation                                 │
+│  6. Purple sends completion message via A2A                                 │
 └─────────────────────────────────────────────────────────────────────────────┘
                                        │
                                        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Green Agent (Evaluator)                            │
-│                              Port 8000                                       │
-│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌──────────────┐  │
-│  │ Task Generator │  │ State Manager │  │   Evaluator   │  │ A2A Server   │  │
-│  └───────────────┘  └───────────────┘  └───────────────┘  └──────────────┘  │
-│         │                   │                  │                  │          │
-│         └───────────────────┴──────────────────┴──────────────────┘          │
-│                                       │                                       │
-│                              ┌────────┴────────┐                             │
-│                              │  WebShop Env   │                              │
-│                              │  (1000 items)   │                              │
-│                              └─────────────────┘                             │
+│                      Green Agent (Evaluator) - Port 8000                     │
+│                                                                              │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                         A2A Server                                   │   │
+│  │  • Receives assessment requests from AgentBeats                      │   │
+│  │  • Sends task kickoffs with MCP URI to Purple                        │   │
+│  │  • Receives completion messages from Purple                          │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+│                                       │                                      │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                    MCP Server (/mcp/{session_id})                    │   │
+│  │  Tools: search(query), click(element_id), checkout()                │   │
+│  │  Session State: cart, budget, turn_count, history                   │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+│                                       │                                      │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                      Evaluation Engine                               │   │
+│  │  • Task Generator (80 tasks across 5 categories)                     │   │
+│  │  • Evaluator (category-specific scoring logic)                       │   │
+│  │  • WebShop Wrapper (1000-product catalog)                            │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
                                        │
-                               A2A Protocol
+                            A2A (orchestration) + MCP (tools)
                                        │
                                        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          Purple Agent (Shopper)                              │
-│                              Port 8001                                       │
-│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐                    │
-│  │  LLM Client   │  │ Action Parser │  │  A2A Server   │                    │
-│  │  (LiteLLM)    │  │               │  │               │                    │
-│  └───────────────┘  └───────────────┘  └───────────────┘                    │
+│                      Purple Agent (Shopper) - Port 8001                      │
+│                                                                              │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                         A2A Server                                   │   │
+│  │  • Receives task kickoffs with MCP URI from Green                    │   │
+│  │  • Sends completion messages back to Green                           │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+│                                       │                                      │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                       ADK Shopping Agent                             │   │
+│  │  • McpToolset (connects to Green's MCP server)                       │   │
+│  │  • ReAct loop (automatic action/observation cycle)                   │   │
+│  │  • LiteLLM (provider-agnostic LLM access)                            │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Protocol Breakdown
+
+- **A2A Protocol**: Used for orchestration between green and purple agents
+  - Green sends task kickoffs with task data (goal, budget, constraints) and MCP URI in `resources` array
+  - Purple sends completion messages back when task is done
+  - Follows AgentBeats standard for agent-to-agent communication
+
+- **MCP Protocol**: Used for tool execution within a task
+  - Green hosts session-scoped MCP server at `/mcp/{session_id}`
+  - Purple's ADK agent connects to MCP server via `McpToolset`
+  - Tools: `search`, `click`, `checkout`
+  - All tool calls monitored by green for evaluation
+
+### Purple Agent Design (ADK Integration)
+
+The purple agent uses Anthropic's Agent Development Kit (ADK) to handle shopping tasks:
+
+1. **A2A Message Handling**: Purple receives kickoff message from green via A2A
+2. **MCP URI Extraction**: Extracts MCP server URI from `message.resources[0].uri`
+3. **ADK Agent Spawning**: Creates a `ShoppingAgent` instance with:
+   - `McpToolset`: Automatically connects to green's MCP server
+   - Task instructions from A2A message (goal, budget, constraints)
+4. **ReAct Loop**: ADK runs automatic action/observation cycles:
+   - Agent thinks about next step
+   - Calls MCP tools (search/click/checkout)
+   - Observes results
+   - Repeats until task complete
+5. **Completion**: Purple sends completion message back to green via A2A
+
+**Key Benefit**: Purple agent requires no manual action parsing or tool call handling - ADK handles the entire ReAct loop automatically using the MCP toolset.
 
 ## Quick Start
 
@@ -82,39 +149,63 @@ docker compose down
 - Python 3.10+
 - Java 11+ (for WebShop's Lucene search)
 - [uv](https://github.com/astral-sh/uv) (Python package manager)
-- Ollama (for local LLM inference)
+- Ollama (for green agent LLM evaluation)
+- LM Studio (for purple agent ADK - runs on port 1234)
 
 #### Setup
 
 ```bash
-# Install Ollama and pull model
+# 1. Install Ollama and pull model (for green agent)
 ollama pull qwen3-coder:30b
 
-# Setup green agent
+# 2. Setup LM Studio (for purple agent)
+# Download and start LM Studio: https://lmstudio.ai/
+# Load model: qwen3-coder-30b-a3b-instruct-mlx
+# Start server on port 1234 (default)
+
+# 3. Setup green agent
 cd green_agent
 uv sync
 cp ../.env.local.example .env.local
 
-# Setup purple agent
+# 4. Setup purple agent
 cd ../purple_agent
 uv sync
+cp ../.env.local.example .env.local
+# Edit .env.local:
+#   ADK_MODEL=openai/qwen3-coder-30b-a3b-instruct-mlx
+#   OPENAI_API_BASE=http://localhost:1234/v1
 ```
 
 #### Running Locally
 
 ```bash
-# Terminal 1: Start green agent
+# Prerequisites: Ensure Ollama and LM Studio are running
+ollama serve                          # Green agent LLM
+# LM Studio should be running on port 1234 with qwen3-coder-30b loaded
+
+# Terminal 1: Start green agent (hosts MCP server + A2A endpoint)
 cd green_agent
 uv run python src/server.py --host 0.0.0.0 --port 8000
 
-# Terminal 2: Start purple agent
+# Terminal 2: Start purple agent (ADK with A2A endpoint)
 cd purple_agent
 uv run python src/server.py --host 0.0.0.0 --port 8001
 
-# Terminal 3: Run assessment
+# Terminal 3: Run assessment (tests A2A + MCP integration)
 cd webshop-plus
 uv run python scripts/run_local_assessment.py --tasks 3 --verbose
 ```
+
+**What Happens During Assessment:**
+1. Green receives assessment request
+2. Green creates MCP session at `/mcp/{session_id}`
+3. Green sends A2A kickoff to purple with MCP URI
+4. Purple spawns ADK agent with McpToolset pointing to MCP URI
+5. ADK runs ReAct loop calling MCP tools (search/click/checkout)
+6. Green monitors MCP calls for evaluation
+7. Purple sends A2A completion message
+8. Green calculates final score
 
 ## Project Structure
 
@@ -122,25 +213,31 @@ uv run python scripts/run_local_assessment.py --tasks 3 --verbose
 webshop-plus/
 ├── green_agent/              # Evaluator agent
 │   ├── src/                  # Source code
-│   │   ├── server.py         # FastAPI A2A server
-│   │   ├── agent.py          # Orchestration logic
-│   │   ├── evaluator.py      # Scoring engine
+│   │   ├── server.py         # FastAPI A2A + MCP server
+│   │   ├── a2a_executor.py   # A2A executor (orchestration)
+│   │   ├── agent.py          # Task management
+│   │   ├── evaluator.py      # Scoring engine (5 categories)
 │   │   ├── state_manager.py  # Session & cart tracking
-│   │   ├── task_generator.py # Task loading
+│   │   ├── task_generator.py # Task loading (80 tasks)
 │   │   ├── llm_client.py     # LiteLLM wrapper
 │   │   ├── messenger.py      # A2A protocol utilities
-│   │   ├── models.py         # Pydantic models
-│   │   └── webshop_wrapper.py # WebShop environment
-│   ├── tests/                # Unit tests (313 tests)
-│   ├── data/tasks/           # 80 task definitions
+│   │   ├── models.py         # 30+ Pydantic models
+│   │   ├── webshop_wrapper.py # WebShop environment
+│   │   └── webshop_mcp/      # MCP server
+│   │       ├── server.py     # FastMCP tools (search/click/checkout)
+│   │       ├── session_state.py # Per-session state
+│   │       └── session_manager.py # Session lifecycle
+│   ├── tests/                # Unit tests (503 tests)
+│   ├── data/tasks/           # 80 task definitions (16 per category)
 │   └── Dockerfile
-├── purple_agent/             # Baseline shopping agent
+├── purple_agent/             # Shopping agent (ADK-based)
 │   ├── src/                  # Source code
 │   │   ├── server.py         # FastAPI A2A server
-│   │   ├── agent.py          # Shopping logic
+│   │   ├── executor.py       # Routes MCP tasks to ADK agent
+│   │   ├── shopping_agent.py # ADK agent with McpToolset
 │   │   ├── llm_client.py     # LiteLLM wrapper
 │   │   └── messenger.py      # A2A protocol utilities
-│   ├── tests/                # Unit tests (53 tests)
+│   ├── tests/                # Unit tests (142 tests)
 │   └── Dockerfile
 ├── webshop/                  # Princeton WebShop (submodule)
 │   └── data/                 # Product catalog (1000 items)
@@ -166,6 +263,62 @@ webshop-plus/
 | Error Recovery | 10 | Fixing cart mistakes | Recovery efficiency |
 
 ## Assessment API
+
+### A2A Contract
+
+WebShop+ uses A2A for orchestration and MCP for tool execution. The green agent sends task kickoffs to the purple agent with the following contract:
+
+**Message from Green to Purple (Task Kickoff):**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "task-{task_id}",
+  "method": "message/stream",
+  "params": {
+    "message": {
+      "parts": [
+        {
+          "kind": "text",
+          "text": "Task: {goal}\n\nBudget: ${budget}\nConstraints: {constraints}\n\nAvailable actions:\n- search(query): Search for products\n- click(element_id): Navigate to product, select options, add to cart\n- checkout(): Complete purchase (terminal action)"
+        }
+      ],
+      "resources": [
+        {
+          "type": "mcp_server",
+          "uri": "http://green-host:8000/mcp/{session_id}",
+          "description": "WebShop MCP server for product search and purchase"
+        }
+      ]
+    }
+  }
+}
+```
+
+**Key Fields:**
+- `message.parts[0].text`: Task description including goal, budget, and constraints
+- `message.resources[0].uri`: MCP server endpoint (session-scoped)
+- `message.resources[0].type`: Always `"mcp_server"` for tool execution
+
+**Message from Purple to Green (Completion):**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "completion-{task_id}",
+  "method": "message/stream",
+  "params": {
+    "message": {
+      "parts": [
+        {
+          "kind": "text",
+          "text": "Task completed. Final cart: {cart_summary}"
+        }
+      ]
+    }
+  }
+}
+```
 
 ### Starting an Assessment
 
@@ -209,12 +362,24 @@ curl -X POST http://localhost:8000/a2a \
 
 WebShop+ uses [LiteLLM](https://github.com/BerriAI/litellm) for provider-agnostic LLM access:
 
+### Green Agent (Evaluator)
+Used for LLM-as-judge evaluation prompts (comparative reasoning, preference memory analysis):
+
 | Environment | Model | Configuration |
 |-------------|-------|---------------|
-| Local (primary) | Qwen3-Coder 30B | `LLM_MODEL=ollama/qwen3-coder:30b` |
-| Local (fallback) | Qwen3 32B | `LLM_MODEL=ollama/qwen3:32b` |
+| Local | Qwen3-Coder 30B | `LLM_MODEL=ollama/qwen3-coder:30b` |
 | Production | Qwen3 32B (Nebius) | `LLM_MODEL=nebius/Qwen/Qwen3-32B` |
-| Alternative | OpenAI GPT-4o | `LLM_MODEL=openai/gpt-4o` |
+
+### Purple Agent (Shopper ADK)
+Used by ADK for shopping decisions in ReAct loop:
+
+| Environment | Model | Configuration |
+|-------------|-------|---------------|
+| Local (recommended) | Qwen3-Coder 30B via LM Studio | `ADK_MODEL=openai/qwen3-coder-30b-a3b-instruct-mlx`<br>`OPENAI_API_BASE=http://localhost:1234/v1` |
+| Production | Qwen3 32B (Nebius) | `ADK_MODEL=nebius/Qwen/Qwen3-32B` |
+| Alternative | OpenAI GPT-4o | `ADK_MODEL=openai/gpt-4o` |
+
+**Note**: Purple agent's ADK requires LM Studio running locally on port 1234 for local development.
 
 ## Docker Images
 
