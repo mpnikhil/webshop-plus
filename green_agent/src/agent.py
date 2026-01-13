@@ -597,12 +597,19 @@ class WebShopPlusAgent:
                         if "actions" in task_result.result_data:
                             result.actions_taken = len(task_result.result_data["actions"])
                         if "turns_used" in task_result.result_data:
+                            logger.info(
+                                "Setting actions_taken from purple agent result_data",
+                                turns_used=task_result.result_data["turns_used"],
+                                task_id=task.task_id,
+                            )
                             result.actions_taken = task_result.result_data["turns_used"]
 
                     logger.info(
                         "MCP task completed successfully",
                         task_id=task.task_id,
                         result_data=task_result.result_data,
+                        actions_taken=result.actions_taken,
+                        mcp_session_id=mcp_session_id,
                     )
                 else:
                     result.error = task_result.error or "Task failed"
@@ -614,16 +621,41 @@ class WebShopPlusAgent:
 
             # Get final result from MCP session if available
             if mcp_session_id and self._session_manager:
-                if is_session_completed(mcp_session_id):
+                session_completed = is_session_completed(mcp_session_id)
+                logger.info(
+                    "Checking MCP session completion",
+                    mcp_session_id=mcp_session_id,
+                    session_completed=session_completed,
+                    task_id=task.task_id,
+                )
+                if session_completed:
                     mcp_result = get_final_result(mcp_session_id)
+                    logger.info(
+                        "Retrieved MCP final result",
+                        mcp_session_id=mcp_session_id,
+                        has_result=mcp_result is not None,
+                        result_keys=list(mcp_result.keys()) if mcp_result else [],
+                        task_id=task.task_id,
+                    )
                     if mcp_result:
                         # Merge MCP result into task execution result
                         if "turns_used" in mcp_result:
+                            logger.info(
+                                "Setting actions_taken from MCP result",
+                                turns_used=mcp_result["turns_used"],
+                                task_id=task.task_id,
+                            )
                             result.actions_taken = mcp_result["turns_used"]
                         if "success" in mcp_result:
                             result.completed = mcp_result["success"]
                         if "reward" in mcp_result:
                             result.total_reward = mcp_result["reward"]
+                else:
+                    logger.warning(
+                        "MCP session not marked as completed",
+                        mcp_session_id=mcp_session_id,
+                        task_id=task.task_id,
+                    )
 
                 # Clean up MCP session
                 await self._session_manager.cleanup_session(mcp_session_id)
@@ -667,6 +699,10 @@ class WebShopPlusAgent:
         memory: Optional[AgentMemory],
     ) -> TaskExecutionResult:
         """Finalize task execution and evaluate."""
+        # Update session with actions_taken from result
+        # (result.actions_taken was set from MCP final result)
+        session.set_action_count(result.actions_taken)
+
         # Complete session
         session_summary = self.state_manager.complete_session(
             session.session_id,

@@ -389,6 +389,23 @@ class SessionState(BaseModel):
         )
         self.current_observation = observation
 
+    def set_action_count(self, count: int) -> None:
+        """Set the action count (for MCP sessions where actions are tracked externally).
+
+        Args:
+            count: Number of actions to set.
+        """
+        # Clear existing actions and add placeholder records to match count
+        self.actions.clear()
+        for i in range(count):
+            self.actions.append(
+                ActionRecord(
+                    action=f"MCP action {i+1}",
+                    observation="Tracked by MCP session",
+                    reward=0.0,
+                )
+            )
+
     def complete(self) -> None:
         """Mark the session as completed."""
         self.completed = True

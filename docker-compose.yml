@@ -21,16 +21,21 @@ services:
       dockerfile: Dockerfile
     image: ghcr.io/mpnikhil/webshop-plus-green:latest
     container_name: webshop-plus-green
+    command: [".venv/bin/python", "src/server.py", "--host", "0.0.0.0", "--port", "8000", "--advertise-host", "green", "--card-url", "http://localhost:8000"]
     ports:
       - "8000:8000"
     environment:
       - LLM_MODEL=${LLM_MODEL:-nebius/Qwen/Qwen3-32B}
       - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_API_BASE=${LLM_API_BASE:-}
+      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.2}
+      - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-8192}
       - WEBSHOP_MODE=${WEBSHOP_MODE:-preview}
+      - WEBSHOP_DIR=/app/webshop
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - PURPLE_AGENT_URL=http://purple:8001/a2a
     volumes:
-      - ./webshop/data:/app/webshop/data:ro
+      - ./webshop:/app/webshop:ro
     depends_on:
       purple:
         condition: service_healthy
@@ -51,11 +56,15 @@ services:
       dockerfile: Dockerfile
     image: ghcr.io/mpnikhil/webshop-plus-purple:latest
     container_name: webshop-plus-purple
+    command: [".venv/bin/python", "src/server.py", "--host", "0.0.0.0", "--port", "8001", "--card-url", "http://purple:8001"]
     ports:
       - "8001:8001"
     environment:
       - LLM_MODEL=${LLM_MODEL:-nebius/Qwen/Qwen3-32B}
       - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_API_BASE=${LLM_API_BASE:-}
+      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.2}
+      - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-8192}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]

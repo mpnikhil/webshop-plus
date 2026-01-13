@@ -49,12 +49,14 @@ logger = structlog.get_logger()
 # Default model for the ADK agent using LiteLLM
 # Uses openai/ prefix for LM Studio's OpenAI-compatible API
 # Can be overridden via environment variable
-DEFAULT_MODEL = os.environ.get("ADK_MODEL", "openai/qwen3-coder-30b-a3b-instruct-mlx")
+# Use LLM_MODEL (from Docker) or ADK_MODEL (from local) or default model
+DEFAULT_MODEL = os.environ.get("LLM_MODEL") or os.environ.get("ADK_MODEL", "openai/qwen3-coder-30b-a3b-instruct-mlx")
 
 # LM Studio API base URL (for local development)
 # LM Studio provides an OpenAI-compatible API
-OPENAI_API_BASE = os.environ.get("OPENAI_API_BASE", "http://localhost:1234/v1")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "lm-studio")
+# Use LLM_API_BASE (from Docker) or OPENAI_API_BASE (from local) or default to localhost
+OPENAI_API_BASE = os.environ.get("LLM_API_BASE") or os.environ.get("OPENAI_API_BASE", "http://localhost:1234/v1")
+OPENAI_API_KEY = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY", "lm-studio")
 
 # Maximum number of turns the agent can take before timing out
 DEFAULT_MAX_TURNS = 30

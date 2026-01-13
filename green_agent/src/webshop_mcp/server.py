@@ -21,6 +21,7 @@ from typing import Any, Protocol
 import structlog
 from bs4 import BeautifulSoup
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from .session_state import SessionState
 
@@ -190,7 +191,20 @@ class WebShopInterface(Protocol):
 # Global FastMCP Server
 # =============================================================================
 
-mcp = FastMCP("WebShop MCP Server")
+# Disable DNS rebinding protection for MCP in trusted environment
+# MCP sessions are already isolated via unique session IDs
+# Purple agents are authenticated via A2A protocol before receiving MCP URIs
+transport_security = TransportSecuritySettings(
+    enable_dns_rebinding_protection=False
+)
+
+mcp = FastMCP(
+    "WebShop MCP Server",
+    transport_security=transport_security,
+)
+
+# Add logging for MCP server initialization
+logger.info("FastMCP server created", transport_security_enabled=transport_security.enable_dns_rebinding_protection)
 
 
 # =============================================================================
@@ -713,7 +727,15 @@ def search(query: str) -> dict[str, Any]:
         - turn: Current turn number
         - budget: Remaining budget info
     """
-    state = get_current_state()
+    logger.info("search() tool called", query=query)
+
+    try:
+        state = get_current_state()
+    except Exception as e:
+        logger.exception("Failed to get current state", error=str(e), query=query)
+        raise
+
+    logger.info("Got session state", session_id=state.session_id)
 
     # Check turn limit first
     if state.increment_turn():
@@ -727,8 +749,15 @@ def search(query: str) -> dict[str, Any]:
     })
 
     # Execute search via WebShop
-    webshop = _get_webshop(state.session_id)
-    result = webshop.step(f"search[{query}]")
+    try:
+        logger.info("About to call _get_webshop", session_id=state.session_id)
+        webshop = _get_webshop(state.session_id)
+        logger.info("Got WebShop interface, calling step()")
+        result = webshop.step(f"search[{query}]")
+        logger.info("WebShop step() completed", observation_len=len(result.observation) if hasattr(result, 'observation') else 0)
+    except Exception as e:
+        logger.exception("Error during WebShop search", error=str(e), query=query, session_id=state.session_id)
+        raise
 
     # Update page state
     state.current_page = "search_results"

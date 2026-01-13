@@ -19,9 +19,10 @@ from rich import print as rprint
 from tqdm import tqdm
 
 
-# Paths - relative to this file
+# Paths - check environment variable first, then calculate relative path
 BASE_DIR = dirname(abspath(__file__))
-WEBSHOP_DIR = join(dirname(dirname(dirname(BASE_DIR))), "webshop")
+# In Docker: /app/webshop, otherwise calculate from BASE_DIR
+WEBSHOP_DIR = os.environ.get("WEBSHOP_DIR", join(dirname(dirname(dirname(BASE_DIR))), "webshop"))
 WEBSHOP_DATA_DIR = join(WEBSHOP_DIR, "data")
 TEMPLATE_DIR = join(WEBSHOP_DIR, "web_agent_site", "templates")
 
