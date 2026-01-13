@@ -24,7 +24,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
 
 # Copy dependency files first for better layer caching
-COPY pyproject.toml ./
+COPY green_agent/pyproject.toml ./
 
 # Create virtual environment and install dependencies
 RUN uv venv .venv && \
@@ -32,12 +32,11 @@ RUN uv venv .venv && \
     uv sync --no-dev
 
 # Copy source code
-COPY src/ ./src/
-COPY data/ ./data/
+COPY green_agent/src/ ./src/
+COPY green_agent/data/ ./data/
 
-# Copy WebShop data (mounted volume can override this)
-# Note: WebShop data should be provided via volume mount for production
-# COPY ../webshop/data ./webshop/data
+# Copy WebShop data for self-contained deployment
+COPY webshop/ ./webshop/
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1
@@ -46,6 +45,7 @@ ENV PYTHONPATH=/app
 ENV PORT=8000
 ENV HOST=0.0.0.0
 ENV ADVERTISE_HOST=green
+ENV WEBSHOP_DIR=/app/webshop
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

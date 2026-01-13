@@ -81,6 +81,7 @@ def _parse_config(metadata: dict[str, Any]) -> AssessmentConfig:
     field_mapping = {
         "num_tasks": "num_tasks",
         "categories": "task_types",
+        "task_types": "task_types",  # Accept both categories and task_types
         "timeout_per_task": "timeout_per_task",
         "max_steps_per_task": "max_steps_per_task",
         "include_memory_tasks": "include_memory_tasks",

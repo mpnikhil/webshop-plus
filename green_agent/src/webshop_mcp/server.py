@@ -484,11 +484,15 @@ def _show_product_page(
     # Truncate name for compact response
     short_name = product.get("name", "Unknown")[:50]
 
+    # Get product attributes for purple agent to see
+    attributes = product_info.get("Attributes", []) if product_info else []
+
     # Keep response compact for LLM context window
     response = {
         "page": state.current_page,
         "product": short_name,
         "price": product.get("price", 0.0),
+        "attributes": attributes,
         "options": options,
         "selected_options": selected_display,
         "actions": ["add_to_cart", "back_to_results"],
@@ -551,16 +555,47 @@ def _add_to_cart(state: SessionState, element: dict[str, Any]) -> dict[str, Any]
     product = element["product"]
     asin = element.get("asin", product.get("asin", ""))
 
-    # Get actual price from WebShop
+    # Get actual price and product info from WebShop
     webshop = _get_webshop(state.session_id)
     price = webshop.product_prices.get(asin, product.get("price", 0.0))
 
-    # Create product with current price
+    # Get catalog attributes from WebShop for evaluation matching
+    product_info = webshop.product_item_dict.get(asin, {})
+    catalog_attributes = {}
+
+    # Extract relevant attributes for evaluation (category, attributes, etc.)
+    if product_info:
+        # Get product category for category matching
+        if "category" in product_info:
+            catalog_attributes["category"] = product_info["category"]
+
+        # Get product Attributes list (e.g., ["gym workout", "running shorts"])
+        # This is the same data purple agent sees on product detail page
+        if "Attributes" in product_info:
+            attrs_list = product_info["Attributes"]
+            if isinstance(attrs_list, list):
+                # Convert list to dict for evaluator matching
+                for attr in attrs_list:
+                    if isinstance(attr, str):
+                        # Split compound attributes like "gym workout" into searchable keys
+                        catalog_attributes[attr] = attr
+
+        # Get product attributes dict (if exists - contains things like "sole", "care", etc.)
+        if "attributes" in product_info:
+            catalog_attributes.update(product_info["attributes"])
+
+        # Also include raw attribute strings from product data
+        for key in ["instruction", "name", "description"]:
+            if key in product_info and isinstance(product_info[key], str):
+                catalog_attributes[f"_raw_{key}"] = product_info[key]
+
+    # Create product with current price and catalog attributes
     cart_product = {
         "name": product.get("name", "Unknown"),
         "price": price,
         "asin": asin,
         "product_id": asin,
+        "catalog_attributes": catalog_attributes,
     }
 
     # Add to cart (this also clears selected_options)

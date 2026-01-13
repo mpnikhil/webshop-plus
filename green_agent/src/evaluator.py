@@ -589,10 +589,23 @@ class Evaluator:
 
         # MCP cart already contains items as dicts
         for cart_item in mcp_state.cart:
+            # Combine catalog attributes (for matching) with selected options
+            attributes = {}
+
+            # First add catalog attributes from WebShop product data
+            catalog_attrs = cart_item.get("catalog_attributes", {})
+            if catalog_attrs:
+                attributes.update(catalog_attrs)
+
+            # Then add selected options (color, size, etc.)
+            options = cart_item.get("options", {})
+            if options:
+                attributes.update(options)
+
             items.append({
                 "product_id": cart_item.get("product_id", ""),
                 "product_name": cart_item.get("name", ""),
-                "attributes": cart_item.get("options", {}),
+                "attributes": attributes,
                 "price": cart_item.get("price", 0.0),
                 "quantity": cart_item.get("quantity", 1),
             })

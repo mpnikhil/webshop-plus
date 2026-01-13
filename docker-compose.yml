@@ -15,25 +15,23 @@ services:
   # Green Agent (Evaluator)
   green:
     build:
-      context: ./green_agent
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: green_agent/Dockerfile
     image: ghcr.io/mpnikhil/webshop-plus-green:latest
     container_name: webshop-plus-green
     command: ["--host", "0.0.0.0", "--port", "8000", "--advertise-host", "green", "--card-url", "http://localhost:8000"]
     ports:
       - "8000:8000"
     environment:
-      - LLM_MODEL=${LLM_MODEL:-nebius/Qwen/Qwen3-32B}
-      - LLM_API_KEY=${LLM_API_KEY:-}
-      - LLM_API_BASE=${LLM_API_BASE:-}
+      - LLM_MODEL=${LLM_MODEL:-openai/Qwen/Qwen3-32B}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.tokenfactory.nebius.com/v1/}
       - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.2}
       - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-8192}
       - WEBSHOP_MODE=${WEBSHOP_MODE:-preview}
       - WEBSHOP_DIR=/app/webshop
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - PURPLE_AGENT_URL=http://purple:8001/a2a
-    volumes:
-      - ./webshop:/app/webshop:ro
     depends_on:
       purple:
         condition: service_healthy
@@ -58,9 +56,9 @@ services:
     ports:
       - "8001:8001"
     environment:
-      - LLM_MODEL=${LLM_MODEL:-nebius/Qwen/Qwen3-32B}
-      - LLM_API_KEY=${LLM_API_KEY:-}
-      - LLM_API_BASE=${LLM_API_BASE:-}
+      - LLM_MODEL=${LLM_MODEL:-openai/Qwen/Qwen3-32B}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.tokenfactory.nebius.com/v1/}
       - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.2}
       - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-8192}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}

@@ -94,10 +94,30 @@ def mock_state_manager():
 @pytest.fixture
 def mock_session_manager():
     """Mock MCP session manager."""
+    from src.webshop_mcp.session_state import SessionState as MCPSessionState
+
     manager = MagicMock()
+
+    # Create a mock MCP session state with history and cart
+    mcp_state = MCPSessionState(
+        session_id="mcp-test-session",
+        goal="Test shopping goal",
+        budget=100.0
+    )
+    mcp_state.history = [
+        {"action": "search", "query": "shoes", "turn": 1},
+        {"action": "click", "element_id": "p1", "turn": 2},
+        {"action": "add_to_cart", "product": {"name": "Shoes", "price": 45.0, "asin": "B001"}, "turn": 3},
+        {"action": "session_end", "reason": "checkout", "turn": 4}
+    ]
+    mcp_state.cart = [
+        {"name": "Shoes", "price": 45.0, "product_id": "B001", "quantity": 1, "options": {}}
+    ]
+    mcp_state.completed = True
 
     # Async methods
     manager.create_session = AsyncMock(return_value=None)
+    manager.get_session = AsyncMock(return_value=mcp_state)
     manager.cleanup_session = AsyncMock(return_value=True)
 
     # Sync methods
@@ -360,10 +380,27 @@ class TestExecuteTaskMCP:
         mock_evaluator,
     ):
         """MCP task execution handles failure."""
+        from src.webshop_mcp.session_state import SessionState as MCPSessionState
+
         # Create mock session manager that returns failure state
         mock_session_manager = MagicMock()
+
+        # Create MCP state with minimal history for failure case
+        mcp_state = MCPSessionState(
+            session_id="mcp-failure-session",
+            goal="Test",
+            budget=100.0
+        )
+        mcp_state.history = [
+            {"action": "search", "query": "test", "turn": 1},
+            {"action": "session_end", "reason": "error", "turn": 2}
+        ]
+        mcp_state.cart = []
+        mcp_state.completed = True
+
         # Async methods
         mock_session_manager.create_session = AsyncMock(return_value=None)
+        mock_session_manager.get_session = AsyncMock(return_value=mcp_state)
         mock_session_manager.cleanup_session = AsyncMock(return_value=True)
         # Sync methods
         mock_session_manager.is_session_completed.return_value = True
@@ -561,10 +598,30 @@ class TestSessionManagerIntegration:
         mock_evaluator,
     ):
         """MCP session result is extracted and merged."""
+        from src.webshop_mcp.session_state import SessionState as MCPSessionState
+
         # Create mock session manager with specific result
         mock_session_manager = MagicMock()
+
+        # Create MCP state with 3 actions in history
+        mcp_state = MCPSessionState(
+            session_id="mcp-result-session",
+            goal="Test",
+            budget=100.0
+        )
+        mcp_state.history = [
+            {"action": "search", "query": "shoes", "turn": 1},
+            {"action": "click", "element_id": "p1", "turn": 2},
+            {"action": "session_end", "reason": "checkout", "turn": 3}
+        ]
+        mcp_state.cart = [
+            {"name": "Shoes", "price": 45.0, "product_id": "B001", "quantity": 1, "options": {}}
+        ]
+        mcp_state.completed = True
+
         # Async methods
         mock_session_manager.create_session = AsyncMock(return_value=None)
+        mock_session_manager.get_session = AsyncMock(return_value=mcp_state)
         mock_session_manager.cleanup_session = AsyncMock(return_value=True)
         # Sync methods
         mock_session_manager.is_session_completed.return_value = True
@@ -604,8 +661,10 @@ class TestSessionManagerIntegration:
                     agent_id="test-agent",
                 )
 
-        # Actions taken should come from MCP session result
-        assert result.actions_taken == 3
+        # After sync, evaluation session should have 3 actions from MCP history
+        # Check the evaluation session state
+        eval_session = mock_state_manager.get_session.return_value
+        assert len(eval_session.actions) == 3
         assert result.completed is True
         assert result.total_reward == 0.85
 

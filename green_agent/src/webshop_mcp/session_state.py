@@ -67,16 +67,18 @@ class SessionState:
 
         Args:
             product: Product dict with at least "name" and "price" keys.
+                     May also include "catalog_attributes" for evaluation.
 
         Returns:
             Status dict with cart state after addition.
         """
-        # Create cart item with selected options
+        # Create cart item with selected options and catalog attributes
         cart_item = {
             "name": product.get("name", "Unknown"),
             "price": product.get("price", 0.0),
             "product_id": product.get("product_id", product.get("asin", "")),
             "options": dict(self.selected_options),
+            "catalog_attributes": product.get("catalog_attributes", {}),
         }
 
         self.cart.append(cart_item)

@@ -75,8 +75,8 @@ class LLMClient:
         """
         self.config = LLMConfig(
             model=model or os.getenv("LLM_MODEL", "openai/qwen3-coder-30b-a3b-instruct-mlx"),
-            api_key=api_key or os.getenv("LLM_API_KEY"),
-            api_base=api_base or os.getenv("LLM_API_BASE"),
+            api_key=api_key or os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY"),
+            api_base=api_base or os.getenv("LLM_API_BASE") or os.getenv("OPENAI_API_BASE"),
             temperature=temperature,
             max_tokens=max_tokens,
             timeout=timeout,
