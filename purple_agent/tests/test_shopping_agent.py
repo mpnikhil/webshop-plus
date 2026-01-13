@@ -546,6 +546,101 @@ class TestDefaultValues:
                 task_data=minimal_task_data,
             )
 
+    @pytest.mark.asyncio
+    async def test_default_max_turns_when_not_specified(self, minimal_task_data):
+        """Default max_turns is used when not specified in task_data."""
+        # Create agent with instance max_turns of 25
+        agent = ShoppingAgent(max_turns=25)
+
+        # Create mock events that would exceed default but not custom limit
+        events = []
+        for i in range(30):
+            mock_event = MagicMock()
+            mock_event.turn_complete = False
+            mock_event.finish_reason = None
+            mock_event.error_message = None
+            mock_event.content = None
+            mock_event.is_final_response.return_value = False
+            mock_event.get_function_calls.return_value = []
+            mock_event.get_function_responses.return_value = []
+            events.append(mock_event)
+
+        # Final event
+        final_event = MagicMock()
+        final_event.turn_complete = True
+        final_event.finish_reason = "STOP"
+        final_event.error_message = None
+        final_event.content = MagicMock()
+        final_event.content.parts = [MagicMock(text="Done")]
+        final_event.is_final_response.return_value = True
+        final_event.get_function_calls.return_value = []
+        final_event.get_function_responses.return_value = []
+        events.append(final_event)
+
+        async def mock_run_async(*args, **kwargs):
+            for event in events:
+                yield event
+
+        with patch("src.shopping_agent.Agent"), \
+             patch("src.shopping_agent.Runner") as MockRunner, \
+             patch("src.shopping_agent.McpToolset"):
+
+            mock_runner_instance = MagicMock()
+            mock_runner_instance.run_async = mock_run_async
+            MockRunner.return_value = mock_runner_instance
+
+            # Task data without max_turns - should use instance default (25)
+            result = await agent.run(
+                mcp_uri="http://localhost:8000/mcp/session-123",
+                task_data=minimal_task_data,
+            )
+
+            # Should hit max_turns limit before reaching final event
+            assert result["turns_used"] == 25
+            assert result["success"] is False
+
+    @pytest.mark.asyncio
+    async def test_custom_max_turns_overrides_default(self, minimal_task_data):
+        """Custom max_turns in task_data overrides instance default."""
+        # Create agent with instance max_turns of 25
+        agent = ShoppingAgent(max_turns=25)
+
+        # Create mock events
+        events = []
+        for i in range(45):
+            mock_event = MagicMock()
+            mock_event.turn_complete = False
+            mock_event.finish_reason = None
+            mock_event.error_message = None
+            mock_event.content = None
+            mock_event.is_final_response.return_value = False
+            mock_event.get_function_calls.return_value = []
+            mock_event.get_function_responses.return_value = []
+            events.append(mock_event)
+
+        async def mock_run_async(*args, **kwargs):
+            for event in events:
+                yield event
+
+        with patch("src.shopping_agent.Agent"), \
+             patch("src.shopping_agent.Runner") as MockRunner, \
+             patch("src.shopping_agent.McpToolset"):
+
+            mock_runner_instance = MagicMock()
+            mock_runner_instance.run_async = mock_run_async
+            MockRunner.return_value = mock_runner_instance
+
+            # Task data WITH custom max_turns - should use 40 instead of 25
+            task_data_with_limit = {**minimal_task_data, "max_turns": 40}
+            result = await agent.run(
+                mcp_uri="http://localhost:8000/mcp/session-123",
+                task_data=task_data_with_limit,
+            )
+
+            # Should hit custom max_turns (40), not instance default (25)
+            assert result["turns_used"] == 40
+            assert result["success"] is False
+
 
 # =============================================================================
 # Test Module Constants

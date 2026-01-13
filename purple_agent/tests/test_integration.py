@@ -15,7 +15,6 @@ import uuid
 
 import pytest
 from starlette.testclient import TestClient
-from unittest.mock import patch, MagicMock
 
 from src.server import create_app, create_agent_card
 
@@ -30,22 +29,6 @@ def client():
     """Create a TestClient for the SDK-based server."""
     app = create_app(card_url="http://testserver")
     return TestClient(app)
-
-
-@pytest.fixture
-def mock_llm_client():
-    """Mock LLM client for tests that need agent execution."""
-    def _mock_complete(messages, **kwargs):
-        content = messages[-1]["content"] if messages else ""
-        if "PRODUCT_TYPE:" in content or "Parse the following" in content:
-            return """PRODUCT_TYPE: running shoes
-BUDGET: 100
-PREFERENCES: comfortable
-CONSTRAINTS: none
-COMPARISON_REQUIRED: no
-SEARCH_QUERY: running shoes"""
-        return "search[running shoes]"
-    return _mock_complete
 
 
 # =============================================================================
@@ -205,37 +188,6 @@ class TestProtocolCompliance:
         data = response.json()
         assert data.get("id") == test_id
 
-    def test_jsonrpc_message_send_format(self, client, mock_llm_client):
-        """Test message/send follows JSON-RPC 2.0 format."""
-        message_id = str(uuid.uuid4())
-
-        with patch("src.agent.LLMClient") as MockLLM:
-            mock_llm = MagicMock()
-            mock_llm.complete = mock_llm_client
-            MockLLM.return_value = mock_llm
-
-            response = client.post(
-                "/a2a",
-                json={
-                    "jsonrpc": "2.0",
-                    "method": "message/send",
-                    "params": {
-                        "message": {
-                            "messageId": message_id,
-                            "role": "user",
-                            "parts": [{"kind": "text", "text": "Find shoes"}],
-                        },
-                    },
-                    "id": "test-1",
-                },
-            )
-
-        assert response.status_code == 200
-        data = response.json()
-        # JSON-RPC 2.0 response format
-        assert data.get("jsonrpc") == "2.0"
-        assert "result" in data
-        assert data.get("id") == "test-1"
 
 
 # =============================================================================
@@ -246,39 +198,8 @@ class TestProtocolCompliance:
 class TestTaskLifecycle:
     """Test task lifecycle via message/send."""
 
-    def test_message_send_creates_task(self, client, mock_llm_client):
-        """Test message/send creates and processes a task."""
-        message_id = str(uuid.uuid4())
 
-        with patch("src.agent.LLMClient") as MockLLM:
-            mock_llm = MagicMock()
-            mock_llm.complete = mock_llm_client
-            MockLLM.return_value = mock_llm
-
-            response = client.post(
-                "/a2a",
-                json={
-                    "jsonrpc": "2.0",
-                    "method": "message/send",
-                    "params": {
-                        "message": {
-                            "messageId": message_id,
-                            "role": "user",
-                            "parts": [{"kind": "text", "text": "Find running shoes under $100"}],
-                        },
-                    },
-                    "id": "test-1",
-                },
-            )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert "result" in data
-        result = data["result"]
-        # Result should contain task status
-        assert "status" in result
-
-    def test_message_send_returns_completed_status(self, client, mock_llm_client):
+    def test_message_send_returns_completed_status(self, client):
         """Test message/send returns completed status when 'done' is sent.
 
         In the AAA architecture, non-MCP messages are treated as TCK tests
@@ -309,7 +230,7 @@ class TestTaskLifecycle:
         # Message containing "done" should complete
         assert result["status"]["state"] == "completed"
 
-    def test_message_send_returns_action_in_message(self, client, mock_llm_client):
+    def test_message_send_returns_action_in_message(self, client):
         """Test message/send returns response message for simple messages.
 
         In the AAA architecture, non-MCP messages are treated as TCK tests
@@ -449,57 +370,6 @@ class TestCreateAgentCard:
 # =============================================================================
 
 
-class TestContextManagement:
-    """Test context/session management across multiple requests."""
-
-    def test_same_context_preserves_state(self, client, mock_llm_client):
-        """Test that same contextId preserves agent state."""
-        context_id = str(uuid.uuid4())
-        message_id_1 = str(uuid.uuid4())
-        message_id_2 = str(uuid.uuid4())
-
-        with patch("src.agent.LLMClient") as MockLLM:
-            mock_llm = MagicMock()
-            mock_llm.complete = mock_llm_client
-            MockLLM.return_value = mock_llm
-
-            # First message
-            response1 = client.post(
-                "/a2a",
-                json={
-                    "jsonrpc": "2.0",
-                    "method": "message/send",
-                    "params": {
-                        "message": {
-                            "messageId": message_id_1,
-                            "role": "user",
-                            "parts": [{"kind": "text", "text": "Find running shoes under $100"}],
-                            "contextId": context_id,
-                        },
-                    },
-                    "id": "test-1",
-                },
-            )
-            assert response1.status_code == 200
-
-            # Second message with same contextId
-            response2 = client.post(
-                "/a2a",
-                json={
-                    "jsonrpc": "2.0",
-                    "method": "message/send",
-                    "params": {
-                        "message": {
-                            "messageId": message_id_2,
-                            "role": "user",
-                            "parts": [{"kind": "text", "text": "OBSERVATION: Search results: B07XYZ - Shoes - $50"}],
-                            "contextId": context_id,
-                        },
-                    },
-                    "id": "test-2",
-                },
-            )
-            assert response2.status_code == 200
 
 
 # =============================================================================

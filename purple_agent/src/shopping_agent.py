@@ -157,6 +157,7 @@ class ShoppingAgent:
                 - goal: str - The shopping task goal
                 - budget: float - Maximum spending allowed
                 - constraints: list[str] - List of constraints
+                - max_turns: int (optional) - Maximum turns for this task (defaults to instance default)
 
         Returns:
             dict with keys:
@@ -178,6 +179,7 @@ class ShoppingAgent:
         budget = task_data.get("budget", 100.0)
         constraints = task_data.get("constraints", [])
         session_id = task_data.get("session_id", str(uuid.uuid4()))
+        max_turns = task_data.get("max_turns", self._max_turns)
 
         print(f"[DEBUG] ShoppingAgent.run() called with MCP URI: {mcp_uri}")
         print(f"[DEBUG] Goal: {goal}, Budget: {budget}")
@@ -278,6 +280,7 @@ class ShoppingAgent:
                 runner=runner,
                 session_id=session_id,
                 goal=goal,
+                max_turns=max_turns,
             )
             print(f"[DEBUG] _execute_runner returned: {result}")
             logger.info("ShoppingAgent.run() completed", result=result)
@@ -320,6 +323,7 @@ class ShoppingAgent:
         runner: Runner,
         session_id: str,
         goal: str,
+        max_turns: int,
     ) -> dict[str, Any]:
         """Execute the runner and collect results.
 
@@ -327,6 +331,7 @@ class ShoppingAgent:
             runner: The ADK Runner instance.
             session_id: Session ID for the run.
             goal: The task goal (used as initial message).
+            max_turns: Maximum number of turns for this execution.
 
         Returns:
             Result dict with success, final_message, turns_used.
@@ -370,11 +375,11 @@ class ShoppingAgent:
             )
 
             # Check for max turns
-            if turns_used >= self._max_turns:
+            if turns_used >= max_turns:
                 logger.warning(
                     "Max turns reached",
                     turns_used=turns_used,
-                    max_turns=self._max_turns,
+                    max_turns=max_turns,
                 )
                 break
 
