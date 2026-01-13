@@ -93,6 +93,28 @@ def _parse_config(metadata: dict[str, Any]) -> AssessmentConfig:
     return AssessmentConfig(**mapped_config)
 
 
+def _extract_message_text(message: Message | None) -> Optional[str]:
+    """Extract text content from an A2A message.
+
+    Args:
+        message: The incoming A2A message.
+
+    Returns:
+        The concatenated text from all TextPart parts, or None if no text found.
+    """
+    if not message or not message.parts:
+        return None
+
+    text_parts = []
+    for part in message.parts:
+        if hasattr(part, "root") and isinstance(part.root, TextPart):
+            text_parts.append(part.root.text)
+        elif isinstance(part, TextPart):
+            text_parts.append(part.text)
+
+    return "\n".join(text_parts) if text_parts else None
+
+
 def _parse_skill_from_message(message: Message | None) -> Optional[str]:
     """Extract the skill ID from the message text if present.
 
@@ -236,11 +258,33 @@ class WebShopPlusExecutor(AgentExecutor):
                 await self._handle_tck_resubscribe_test(updater, context)
                 return
 
-            # Parse request metadata
+            # Parse request - try message text first (agentbeats-run format), then metadata
             metadata = context.metadata or {}
             participants = metadata.get("participants", {})
 
-            # If no participants, handle as simple echo message (for conformance testing)
+            # Try parsing EvalRequest from message text if no participants in metadata
+            if not participants and context.message:
+                message_text = _extract_message_text(context.message)
+                if message_text:
+                    try:
+                        eval_request = json.loads(message_text)
+                        if isinstance(eval_request, dict):
+                            # Extract participants and config from EvalRequest JSON
+                            participants = eval_request.get("participants", {})
+                            if participants:
+                                # Merge parsed data into metadata for downstream processing
+                                metadata["participants"] = participants
+                                if "config" in eval_request:
+                                    metadata["config"] = eval_request["config"]
+                                logger.info(
+                                    "Parsed EvalRequest from message text",
+                                    participants=list(participants.keys()),
+                                    has_config="config" in eval_request,
+                                )
+                    except json.JSONDecodeError:
+                        logger.debug("Message text is not JSON, continuing with metadata check")
+
+            # If still no participants, handle as simple echo message (for conformance testing)
             if not participants:
                 await self._handle_simple_message(updater, context)
                 return

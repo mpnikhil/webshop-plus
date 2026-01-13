@@ -44,4 +44,5 @@ EXPOSE ${PORT}
 
 # Run the server
 # Use exec form for proper signal handling
-CMD [".venv/bin/python", "src/server.py", "--host", "0.0.0.0", "--port", "8001"]
+ENTRYPOINT [".venv/bin/python", "src/server.py"]
+CMD ["--host", "0.0.0.0", "--port", "8001"]

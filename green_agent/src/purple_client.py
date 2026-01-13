@@ -139,7 +139,10 @@ class PurpleAgentClient:
 
             # Create custom httpx client with configured timeout
             httpx_client = httpx.AsyncClient(timeout=httpx.Timeout(self.timeout))
-            client_config = ClientConfig(httpx_client=httpx_client)
+            client_config = ClientConfig(
+                httpx_client=httpx_client,
+                streaming=True,  # Enable streaming for real-time task updates
+            )
 
             self._client = await ClientFactory.connect(
                 self.agent_url,
