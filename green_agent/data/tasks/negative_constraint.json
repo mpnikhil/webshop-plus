@@ -1,344 +1,436 @@
 [
   {
-    "task_id": "constraint_001",
+    "task_id": "negative_001",
     "task_type": "negative_constraint",
-    "instruction": "I need a good face moisturizer, but I'm allergic to fragrances. Make sure it's fragrance-free.",
-    "difficulty": "easy",
-    "expected_actions": 10,
-    "timeout_seconds": 180,
-    "constraints": {
-      "required_attributes": ["moisturizer", "face"],
-      "forbidden_attributes": ["fragrance", "scented", "perfume"],
-      "forbidden_terms": ["fragrance", "parfum", "scented", "perfumed"]
-    },
-    "evaluation_criteria": {
-      "constraint_violation_penalty": 0.5,
-      "match_score_weight": 0.5
-    }
-  },
-  {
-    "task_id": "constraint_002",
-    "task_type": "negative_constraint",
-    "instruction": "Find me a protein bar that doesn't contain any peanuts. I have a severe peanut allergy.",
-    "difficulty": "easy",
-    "expected_actions": 10,
-    "timeout_seconds": 180,
-    "constraints": {
-      "required_attributes": ["protein bar"],
-      "forbidden_attributes": ["peanut", "peanuts", "peanut butter"],
-      "forbidden_terms": ["peanut", "peanuts", "peanut butter", "may contain peanuts"]
-    },
-    "evaluation_criteria": {
-      "constraint_violation_penalty": 0.5,
-      "match_score_weight": 0.5
-    }
-  },
-  {
-    "task_id": "constraint_003",
-    "task_type": "negative_constraint",
-    "instruction": "I want a laptop bag, but I really don't like leather. Please find me one made from other materials.",
-    "difficulty": "easy",
-    "expected_actions": 10,
-    "timeout_seconds": 180,
-    "constraints": {
-      "required_attributes": ["laptop bag"],
-      "forbidden_attributes": ["leather", "genuine leather", "real leather"],
-      "forbidden_terms": ["leather", "cowhide", "calfskin"]
-    },
-    "evaluation_criteria": {
-      "constraint_violation_penalty": 0.5,
-      "match_score_weight": 0.5
-    }
-  },
-  {
-    "task_id": "constraint_004",
-    "task_type": "negative_constraint",
-    "instruction": "I need running shoes but I can't wear Nike due to a sponsorship conflict. Any other brand is fine.",
+    "instruction": "Find me dress shirts but NOT slim fit. Budget $40.",
     "difficulty": "easy",
     "expected_actions": 12,
     "timeout_seconds": 180,
     "constraints": {
-      "required_attributes": ["running shoes"],
-      "forbidden_attributes": ["Nike"],
-      "forbidden_terms": ["Nike", "Just Do It", "Swoosh"]
+      "budget": 40.0,
+      "forbidden_attributes": [
+        "slim fit"
+      ],
+      "required_attributes": [],
+      "forbidden_terms": []
     },
     "evaluation_criteria": {
-      "constraint_violation_penalty": 0.5,
-      "match_score_weight": 0.5
+      "constraint_adherence_weight": 0.6,
+      "task_completion_weight": 0.4
     }
   },
   {
-    "task_id": "constraint_005",
+    "task_id": "negative_002",
     "task_type": "negative_constraint",
-    "instruction": "Looking for a good multivitamin that doesn't contain iron. My doctor says I get enough iron from my diet.",
-    "difficulty": "easy",
-    "expected_actions": 10,
-    "timeout_seconds": 180,
-    "constraints": {
-      "required_attributes": ["multivitamin"],
-      "forbidden_attributes": ["iron", "with iron"],
-      "forbidden_terms": ["iron", "ferrous", "ferric"]
-    },
-    "evaluation_criteria": {
-      "constraint_violation_penalty": 0.5,
-      "match_score_weight": 0.5
-    }
-  },
-  {
-    "task_id": "constraint_006",
-    "task_type": "negative_constraint",
-    "instruction": "I want a children's toy for my 3-year-old, but nothing with small parts that could be a choking hazard.",
+    "instruction": "I need loafers with rubber sole, but NO slip-ons please. Budget $65.",
     "difficulty": "easy",
     "expected_actions": 12,
     "timeout_seconds": 180,
     "constraints": {
-      "required_attributes": ["toy", "children", "age 3"],
-      "forbidden_attributes": ["small parts", "choking hazard"],
-      "forbidden_terms": ["small parts", "choking hazard", "not for children under 3", "ages 4+", "ages 5+"]
+      "budget": 65.0,
+      "forbidden_attributes": [
+        "slip-ons",
+        "slip on"
+      ],
+      "required_attributes": [
+        "rubber sole"
+      ],
+      "forbidden_terms": []
     },
     "evaluation_criteria": {
-      "constraint_violation_penalty": 0.5,
-      "match_score_weight": 0.5
+      "constraint_adherence_weight": 0.6,
+      "task_completion_weight": 0.4
     }
   },
   {
-    "task_id": "constraint_007",
+    "task_id": "negative_003",
     "task_type": "negative_constraint",
-    "instruction": "Find me a nice candle that isn't too strong. I'm sensitive to heavy scents, so nothing with musk or patchouli.",
+    "instruction": "Get me a lamp for living room, but NOT floor lamp. Budget $55.",
     "difficulty": "easy",
-    "expected_actions": 10,
+    "expected_actions": 12,
     "timeout_seconds": 180,
     "constraints": {
-      "required_attributes": ["candle"],
-      "forbidden_attributes": ["musk", "patchouli", "strong scent"],
-      "forbidden_terms": ["musk", "patchouli", "intense", "bold fragrance"]
+      "budget": 55.0,
+      "forbidden_attributes": [
+        "floor lamp",
+        "floor"
+      ],
+      "required_attributes": [
+        "living room"
+      ],
+      "forbidden_terms": []
     },
     "evaluation_criteria": {
-      "constraint_violation_penalty": 0.5,
-      "match_score_weight": 0.5
+      "constraint_adherence_weight": 0.6,
+      "task_completion_weight": 0.4
     }
   },
   {
-    "task_id": "constraint_008",
+    "task_id": "negative_004",
     "task_type": "negative_constraint",
-    "instruction": "I need a breakfast cereal that's low in sugar but definitely not anything with artificial sweeteners. I don't trust those.",
-    "difficulty": "medium",
-    "expected_actions": 14,
-    "timeout_seconds": 240,
-    "constraints": {
-      "required_attributes": ["cereal", "low sugar"],
-      "forbidden_attributes": ["artificial sweetener", "sucralose", "aspartame", "stevia"],
-      "forbidden_terms": ["sucralose", "aspartame", "stevia", "splenda", "equal", "artificial sweetener", "sugar-free"]
-    },
-    "evaluation_criteria": {
-      "constraint_violation_penalty": 0.4,
-      "match_score_weight": 0.6
-    }
-  },
-  {
-    "task_id": "constraint_009",
-    "task_type": "negative_constraint",
-    "instruction": "I'm looking for a moisturizing shampoo. I want something without sulfates or parabens - my hair is very sensitive.",
-    "difficulty": "medium",
-    "expected_actions": 14,
-    "timeout_seconds": 240,
-    "constraints": {
-      "required_attributes": ["shampoo", "moisturizing"],
-      "forbidden_attributes": ["sulfate", "paraben"],
-      "forbidden_terms": ["sulfate", "sulfates", "SLS", "SLES", "paraben", "parabens", "sodium lauryl sulfate"]
-    },
-    "evaluation_criteria": {
-      "constraint_violation_penalty": 0.4,
-      "match_score_weight": 0.6
-    }
-  },
-  {
-    "task_id": "constraint_010",
-    "task_type": "negative_constraint",
-    "instruction": "I want a nice watch but nothing too flashy. No gold, no diamonds, no bling. Something understated and professional.",
-    "difficulty": "medium",
-    "expected_actions": 14,
-    "timeout_seconds": 240,
-    "constraints": {
-      "required_attributes": ["watch", "professional"],
-      "forbidden_attributes": ["gold", "diamond", "crystals", "rhinestone"],
-      "forbidden_terms": ["gold", "gold-tone", "diamond", "rhinestone", "crystals", "bling", "bejeweled"]
-    },
-    "evaluation_criteria": {
-      "constraint_violation_penalty": 0.4,
-      "match_score_weight": 0.6
-    }
-  },
-  {
-    "task_id": "constraint_011",
-    "task_type": "negative_constraint",
-    "instruction": "I need a comfortable t-shirt but I can't wear polyester - it makes me break out. Cotton or bamboo only.",
-    "difficulty": "medium",
+    "instruction": "I want body care but definitely NO animal testing products. Budget $35.",
+    "difficulty": "easy",
     "expected_actions": 12,
-    "timeout_seconds": 240,
+    "timeout_seconds": 180,
     "constraints": {
-      "required_attributes": ["t-shirt", "comfortable"],
-      "forbidden_attributes": ["polyester", "synthetic"],
-      "forbidden_terms": ["polyester", "poly blend", "synthetic", "nylon", "acrylic"],
-      "budget": 40.00
+      "budget": 35.0,
+      "forbidden_attributes": [
+        "animal testing"
+      ],
+      "required_attributes": [],
+      "forbidden_terms": []
     },
     "evaluation_criteria": {
-      "constraint_violation_penalty": 0.4,
-      "match_score_weight": 0.6
+      "constraint_adherence_weight": 0.6,
+      "task_completion_weight": 0.4
     }
   },
   {
-    "task_id": "constraint_012",
+    "task_id": "negative_005",
     "task_type": "negative_constraint",
-    "instruction": "Looking for a snack for my kid's lunchbox. No tree nuts, no dairy, and nothing with high fructose corn syrup. They have multiple allergies.",
+    "instruction": "Find sneakers but NOT with high heel. Budget $80.",
+    "difficulty": "easy",
+    "expected_actions": 12,
+    "timeout_seconds": 180,
+    "constraints": {
+      "budget": 80.0,
+      "forbidden_attributes": [
+        "high heel"
+      ],
+      "required_attributes": [],
+      "forbidden_terms": []
+    },
+    "evaluation_criteria": {
+      "constraint_adherence_weight": 0.6,
+      "task_completion_weight": 0.4
+    }
+  },
+  {
+    "task_id": "negative_006",
+    "task_type": "negative_constraint",
+    "instruction": "Get screen protector but NOT plastic, needs to be glass. Budget $20.",
+    "difficulty": "easy",
+    "expected_actions": 12,
+    "timeout_seconds": 180,
+    "constraints": {
+      "budget": 20.0,
+      "forbidden_attributes": [
+        "plastic"
+      ],
+      "required_attributes": [
+        "glass"
+      ],
+      "forbidden_terms": []
+    },
+    "evaluation_criteria": {
+      "constraint_adherence_weight": 0.6,
+      "task_completion_weight": 0.4
+    }
+  },
+  {
+    "task_id": "negative_007",
+    "task_type": "negative_constraint",
+    "instruction": "I need hoodies but NOT loose fit. Budget $50.",
+    "difficulty": "easy",
+    "expected_actions": 12,
+    "timeout_seconds": 180,
+    "constraints": {
+      "budget": 50.0,
+      "forbidden_attributes": [
+        "loose fit",
+        "loose"
+      ],
+      "required_attributes": [],
+      "forbidden_terms": []
+    },
+    "evaluation_criteria": {
+      "constraint_adherence_weight": 0.6,
+      "task_completion_weight": 0.4
+    }
+  },
+  {
+    "task_id": "negative_008",
+    "task_type": "negative_constraint",
+    "instruction": "Need dress shirts with machine wash but absolutely NO polyester. Budget $55.",
     "difficulty": "medium",
     "expected_actions": 16,
     "timeout_seconds": 240,
     "constraints": {
-      "required_attributes": ["snack", "kid-friendly"],
-      "forbidden_attributes": ["tree nuts", "dairy", "milk", "high fructose corn syrup"],
-      "forbidden_terms": ["almonds", "walnuts", "cashews", "pecans", "milk", "cheese", "butter", "whey", "casein", "high fructose corn syrup", "HFCS"]
+      "budget": 55.0,
+      "forbidden_attributes": [
+        "polyester"
+      ],
+      "required_attributes": [
+        "machine wash"
+      ],
+      "forbidden_terms": []
     },
     "evaluation_criteria": {
-      "constraint_violation_penalty": 0.35,
-      "match_score_weight": 0.65
+      "constraint_adherence_weight": 0.7,
+      "task_completion_weight": 0.3
     }
   },
   {
-    "task_id": "constraint_013",
+    "task_id": "negative_009",
     "task_type": "negative_constraint",
-    "instruction": "I want a foundation for sensitive skin. Nothing with alcohol, nothing with fragrance, and no mineral oil. My dermatologist was very specific.",
+    "instruction": "Find men's pants but NOT jeans and NOT denim material. Budget $60.",
     "difficulty": "medium",
-    "expected_actions": 14,
-    "timeout_seconds": 240,
-    "constraints": {
-      "required_attributes": ["foundation", "sensitive skin"],
-      "forbidden_attributes": ["alcohol", "fragrance", "mineral oil"],
-      "forbidden_terms": ["alcohol", "denatured alcohol", "SD alcohol", "fragrance", "parfum", "mineral oil", "petrolatum"]
-    },
-    "evaluation_criteria": {
-      "constraint_violation_penalty": 0.35,
-      "match_score_weight": 0.65
-    }
-  },
-  {
-    "task_id": "constraint_014",
-    "task_type": "negative_constraint",
-    "instruction": "Find me a good energy drink, but I'm caffeine-sensitive. No caffeine, no guarana, and nothing with taurine either.",
-    "difficulty": "medium",
-    "expected_actions": 12,
-    "timeout_seconds": 240,
-    "constraints": {
-      "required_attributes": ["energy drink"],
-      "forbidden_attributes": ["caffeine", "guarana", "taurine"],
-      "forbidden_terms": ["caffeine", "guarana", "taurine", "coffee extract", "green tea extract"]
-    },
-    "evaluation_criteria": {
-      "constraint_violation_penalty": 0.4,
-      "match_score_weight": 0.6
-    }
-  },
-  {
-    "task_id": "constraint_015",
-    "task_type": "negative_constraint",
-    "instruction": "I need a vegan leather wallet. Must look professional, but absolutely no animal products and nothing from fast fashion brands like Shein or H&M.",
-    "difficulty": "medium",
-    "expected_actions": 14,
-    "timeout_seconds": 240,
-    "constraints": {
-      "required_attributes": ["wallet", "vegan leather", "professional"],
-      "forbidden_attributes": ["leather", "genuine leather", "Shein", "H&M"],
-      "forbidden_terms": ["genuine leather", "real leather", "cowhide", "Shein", "H&M", "animal leather"]
-    },
-    "evaluation_criteria": {
-      "constraint_violation_penalty": 0.4,
-      "match_score_weight": 0.6
-    }
-  },
-  {
-    "task_id": "constraint_016",
-    "task_type": "negative_constraint",
-    "instruction": "I want a baby lotion that's completely safe. No parabens, no phthalates, no synthetic fragrances, and no dyes. This is for a newborn.",
-    "difficulty": "hard",
     "expected_actions": 16,
-    "timeout_seconds": 300,
+    "timeout_seconds": 240,
     "constraints": {
-      "required_attributes": ["baby lotion", "gentle", "newborn safe"],
-      "forbidden_attributes": ["paraben", "phthalate", "synthetic fragrance", "dye"],
-      "forbidden_terms": ["paraben", "phthalate", "fragrance", "parfum", "dye", "colorant", "FD&C", "synthetic", "artificial color"]
+      "budget": 60.0,
+      "forbidden_attributes": [
+        "jeans",
+        "denim"
+      ],
+      "required_attributes": [],
+      "forbidden_terms": []
     },
     "evaluation_criteria": {
-      "constraint_violation_penalty": 0.3,
-      "match_score_weight": 0.7
+      "constraint_adherence_weight": 0.7,
+      "task_completion_weight": 0.3
     }
   },
   {
-    "task_id": "constraint_017",
+    "task_id": "negative_010",
     "task_type": "negative_constraint",
-    "instruction": "I need gluten-free pasta, but not made from corn, rice, or legumes. I also can't have anything processed in a facility with wheat. Find me something safe for severe celiac.",
-    "difficulty": "hard",
-    "expected_actions": 18,
-    "timeout_seconds": 300,
+    "instruction": "I want table lamp but NO plastic and NOT battery operated. Budget $70.",
+    "difficulty": "medium",
+    "expected_actions": 16,
+    "timeout_seconds": 240,
     "constraints": {
-      "required_attributes": ["pasta", "gluten-free", "celiac safe"],
-      "forbidden_attributes": ["wheat", "corn", "rice", "legume", "chickpea", "lentil"],
-      "forbidden_terms": ["wheat", "corn", "rice", "chickpea", "lentil", "bean", "processed in a facility", "may contain wheat", "shared equipment"]
+      "budget": 70.0,
+      "forbidden_attributes": [
+        "plastic",
+        "battery"
+      ],
+      "required_attributes": [],
+      "forbidden_terms": []
     },
     "evaluation_criteria": {
-      "constraint_violation_penalty": 0.3,
-      "match_score_weight": 0.7
+      "constraint_adherence_weight": 0.7,
+      "task_completion_weight": 0.3
     }
   },
   {
-    "task_id": "constraint_018",
+    "task_id": "negative_011",
     "task_type": "negative_constraint",
-    "instruction": "Looking for a face sunscreen. SPF 50+, but no oxybenzone, no octinoxate, no retinyl palmitate, no added fragrance, and it needs to be reef-safe. I'm going to Hawaii.",
-    "difficulty": "hard",
-    "expected_actions": 18,
-    "timeout_seconds": 300,
+    "instruction": "Get hair products but NO sulfates and NO parabens. Budget $45.",
+    "difficulty": "medium",
+    "expected_actions": 16,
+    "timeout_seconds": 240,
     "constraints": {
-      "required_attributes": ["sunscreen", "face", "SPF 50"],
-      "forbidden_attributes": ["oxybenzone", "octinoxate", "retinyl palmitate", "fragrance"],
-      "forbidden_terms": ["oxybenzone", "octinoxate", "retinyl palmitate", "fragrance", "parfum", "avobenzone", "not reef-safe"],
-      "budget": 35.00
+      "budget": 45.0,
+      "forbidden_attributes": [
+        "sulfate",
+        "paraben"
+      ],
+      "required_attributes": [],
+      "forbidden_terms": []
     },
     "evaluation_criteria": {
-      "constraint_violation_penalty": 0.25,
-      "match_score_weight": 0.75
+      "constraint_adherence_weight": 0.7,
+      "task_completion_weight": 0.3
     }
   },
   {
-    "task_id": "constraint_019",
+    "task_id": "negative_012",
     "task_type": "negative_constraint",
-    "instruction": "I need a dog food that my vet approved. No chicken, no grain, no artificial preservatives, no byproducts, and no corn/wheat/soy. My dog has severe food sensitivities.",
-    "difficulty": "hard",
-    "expected_actions": 20,
-    "timeout_seconds": 300,
+    "instruction": "Need socks but NOT ankle style and NOT white color. Budget $30.",
+    "difficulty": "medium",
+    "expected_actions": 16,
+    "timeout_seconds": 240,
     "constraints": {
-      "required_attributes": ["dog food", "limited ingredient"],
-      "forbidden_attributes": ["chicken", "grain", "artificial preservative", "byproduct", "corn", "wheat", "soy"],
-      "forbidden_terms": ["chicken", "grain", "corn", "wheat", "soy", "byproduct", "by-product", "BHA", "BHT", "ethoxyquin", "artificial preservative", "poultry byproduct"]
+      "budget": 30.0,
+      "forbidden_attributes": [
+        "ankle",
+        "white"
+      ],
+      "required_attributes": [],
+      "forbidden_terms": []
     },
     "evaluation_criteria": {
-      "constraint_violation_penalty": 0.25,
-      "match_score_weight": 0.75
+      "constraint_adherence_weight": 0.7,
+      "task_completion_weight": 0.3
     }
   },
   {
-    "task_id": "constraint_020",
+    "task_id": "negative_013",
     "task_type": "negative_constraint",
-    "instruction": "Find me an anti-aging serum for sensitive, acne-prone skin. No retinol (I'm pregnant), no vitamin A derivatives, no salicylic acid, no benzoyl peroxide, no essential oils, and definitely no fragrance.",
-    "difficulty": "hard",
-    "expected_actions": 20,
-    "timeout_seconds": 300,
+    "instruction": "Find living room furniture but NOT assembly required. Budget $100.",
+    "difficulty": "medium",
+    "expected_actions": 16,
+    "timeout_seconds": 240,
     "constraints": {
-      "required_attributes": ["serum", "anti-aging", "sensitive skin", "pregnancy safe"],
-      "forbidden_attributes": ["retinol", "retinyl", "vitamin A", "salicylic acid", "benzoyl peroxide", "essential oil", "fragrance"],
-      "forbidden_terms": ["retinol", "retinyl", "retinoid", "vitamin A", "tretinoin", "salicylic acid", "BHA", "benzoyl peroxide", "essential oil", "tea tree", "lavender oil", "fragrance", "parfum"]
+      "budget": 100.0,
+      "forbidden_attributes": [
+        "assembly required",
+        "assembly"
+      ],
+      "required_attributes": [],
+      "forbidden_terms": []
     },
     "evaluation_criteria": {
-      "constraint_violation_penalty": 0.2,
-      "match_score_weight": 0.8
+      "constraint_adherence_weight": 0.7,
+      "task_completion_weight": 0.3
+    }
+  },
+  {
+    "task_id": "negative_014",
+    "task_type": "negative_constraint",
+    "instruction": "Get body treatments but NO synthetic ingredients. Budget $50.",
+    "difficulty": "medium",
+    "expected_actions": 16,
+    "timeout_seconds": 240,
+    "constraints": {
+      "budget": 50.0,
+      "forbidden_attributes": [
+        "synthetic"
+      ],
+      "required_attributes": [],
+      "forbidden_terms": []
+    },
+    "evaluation_criteria": {
+      "constraint_adherence_weight": 0.7,
+      "task_completion_weight": 0.3
+    }
+  },
+  {
+    "task_id": "negative_015",
+    "task_type": "negative_constraint",
+    "instruction": "Shopping for work wardrobe. Need dress shirts machine washable but NO slim fit, NO short sleeves, NO polyester. Budget $75.",
+    "difficulty": "hard",
+    "expected_actions": 22,
+    "timeout_seconds": 300,
+    "constraints": {
+      "budget": 75.0,
+      "forbidden_attributes": [
+        "slim fit",
+        "short sleeve",
+        "polyester"
+      ],
+      "required_attributes": [
+        "machine wash"
+      ],
+      "forbidden_terms": []
+    },
+    "evaluation_criteria": {
+      "constraint_adherence_weight": 0.75,
+      "task_completion_weight": 0.25
+    }
+  },
+  {
+    "task_id": "negative_016",
+    "task_type": "negative_constraint",
+    "instruction": "Home office setup. Need lamps for living room but NO floor lamps, NO plastic, NO cheap quality. Budget $120.",
+    "difficulty": "hard",
+    "expected_actions": 22,
+    "timeout_seconds": 300,
+    "constraints": {
+      "budget": 120.0,
+      "forbidden_attributes": [
+        "floor lamp",
+        "plastic",
+        "cheap"
+      ],
+      "required_attributes": [
+        "living room"
+      ],
+      "forbidden_terms": []
+    },
+    "evaluation_criteria": {
+      "constraint_adherence_weight": 0.75,
+      "task_completion_weight": 0.25
+    }
+  },
+  {
+    "task_id": "negative_017",
+    "task_type": "negative_constraint",
+    "instruction": "Footwear shopping. Want shoes with rubber sole but NO sneakers, NO high heel, NO open toe. Budget $90.",
+    "difficulty": "hard",
+    "expected_actions": 22,
+    "timeout_seconds": 300,
+    "constraints": {
+      "budget": 90.0,
+      "forbidden_attributes": [
+        "sneakers",
+        "high heel",
+        "open toe"
+      ],
+      "required_attributes": [
+        "rubber sole"
+      ],
+      "forbidden_terms": []
+    },
+    "evaluation_criteria": {
+      "constraint_adherence_weight": 0.75,
+      "task_completion_weight": 0.25
+    }
+  },
+  {
+    "task_id": "negative_018",
+    "task_type": "negative_constraint",
+    "instruction": "Beauty routine. Need skincare but NO animal testing, NO synthetic fragrances, NO alcohol. Budget $65.",
+    "difficulty": "hard",
+    "expected_actions": 22,
+    "timeout_seconds": 300,
+    "constraints": {
+      "budget": 65.0,
+      "forbidden_attributes": [
+        "animal testing",
+        "synthetic",
+        "alcohol"
+      ],
+      "required_attributes": [],
+      "forbidden_terms": []
+    },
+    "evaluation_criteria": {
+      "constraint_adherence_weight": 0.75,
+      "task_completion_weight": 0.25
+    }
+  },
+  {
+    "task_id": "negative_019",
+    "task_type": "negative_constraint",
+    "instruction": "Wardrobe update. Want men's clothing but NO jeans, NO shorts, NO t-shirts. Budget $100.",
+    "difficulty": "hard",
+    "expected_actions": 22,
+    "timeout_seconds": 300,
+    "constraints": {
+      "budget": 100.0,
+      "forbidden_attributes": [
+        "jeans",
+        "shorts",
+        "t-shirts"
+      ],
+      "required_attributes": [],
+      "forbidden_terms": []
+    },
+    "evaluation_criteria": {
+      "constraint_adherence_weight": 0.75,
+      "task_completion_weight": 0.25
+    }
+  },
+  {
+    "task_id": "negative_020",
+    "task_type": "negative_constraint",
+    "instruction": "Tech accessories. Need phone items but NO cases, NO plastic, NO wired options. Budget $70.",
+    "difficulty": "hard",
+    "expected_actions": 22,
+    "timeout_seconds": 300,
+    "constraints": {
+      "budget": 70.0,
+      "forbidden_attributes": [
+        "case",
+        "plastic",
+        "wired"
+      ],
+      "required_attributes": [],
+      "forbidden_terms": []
+    },
+    "evaluation_criteria": {
+      "constraint_adherence_weight": 0.75,
+      "task_completion_weight": 0.25
     }
   }
 ]

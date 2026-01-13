@@ -2,286 +2,375 @@
   {
     "task_id": "compare_001",
     "task_type": "comparative_reasoning",
-    "instruction": "I'm looking to buy a Bluetooth speaker. Can you compare a couple of options and tell me which one would be best for outdoor use? My budget is around $80.",
+    "instruction": "Compare two dress shirts - one slim fit and one classic fit. Which has better value?",
     "difficulty": "easy",
-    "expected_actions": 15,
+    "expected_actions": 18,
     "timeout_seconds": 240,
-    "requirements": {
-      "category": "electronics",
-      "attributes": {"type": "Bluetooth speaker", "use_case": "outdoor"},
-      "budget": 80.00,
-      "comparison_request": "Compare at least 2 options and justify recommendation"
-    },
     "evaluation_criteria": {
-      "minimum_options_explored": 2,
-      "justification_required": true,
-      "justification_quality_weight": 0.5
+      "comparison_quality_weight": 0.5,
+      "reasoning_clarity_weight": 0.3,
+      "decision_quality_weight": 0.2
+    },
+    "requirements": {
+      "category": "general",
+      "attributes": {
+        "aspects": [
+          "slim fit",
+          "classic fit"
+        ]
+      },
+      "budget": 100.0,
+      "comparison_request": "Compare two dress shirts - one slim fit and one classic fit. Which has better value?"
     }
   },
   {
     "task_id": "compare_002",
     "task_type": "comparative_reasoning",
-    "instruction": "I need a new electric toothbrush. There are so many options - can you look at a few and recommend the best value for the money? Budget is $100.",
+    "instruction": "I need loafers. Compare rubber sole vs leather sole options and recommend.",
     "difficulty": "easy",
-    "expected_actions": 14,
+    "expected_actions": 18,
     "timeout_seconds": 240,
-    "requirements": {
-      "category": "health",
-      "attributes": {"type": "electric toothbrush"},
-      "budget": 100.00,
-      "comparison_request": "Find best value option with reasoning"
-    },
     "evaluation_criteria": {
-      "minimum_options_explored": 2,
-      "justification_required": true,
-      "justification_quality_weight": 0.5
+      "comparison_quality_weight": 0.5,
+      "reasoning_clarity_weight": 0.3,
+      "decision_quality_weight": 0.2
+    },
+    "requirements": {
+      "category": "general",
+      "attributes": {
+        "aspects": [
+          "rubber sole",
+          "leather sole"
+        ]
+      },
+      "budget": 100.0,
+      "comparison_request": "I need loafers. Compare rubber sole vs leather sole options and recommend."
     }
   },
   {
     "task_id": "compare_003",
     "task_type": "comparative_reasoning",
-    "instruction": "I want to buy a yoga mat. Which one would be best for someone who sweats a lot during hot yoga? Compare your top picks.",
+    "instruction": "Compare floor lamps vs table lamps for living room. Which is better for my space?",
     "difficulty": "easy",
-    "expected_actions": 14,
+    "expected_actions": 18,
     "timeout_seconds": 240,
-    "requirements": {
-      "category": "sports",
-      "attributes": {"type": "yoga mat", "feature": "non-slip", "use_case": "hot yoga"},
-      "budget": 70.00,
-      "comparison_request": "Compare options for grip and sweat resistance"
-    },
     "evaluation_criteria": {
-      "minimum_options_explored": 2,
-      "justification_required": true,
-      "justification_quality_weight": 0.5
+      "comparison_quality_weight": 0.5,
+      "reasoning_clarity_weight": 0.3,
+      "decision_quality_weight": 0.2
+    },
+    "requirements": {
+      "category": "general",
+      "attributes": {
+        "aspects": [
+          "floor lamp",
+          "table lamp"
+        ]
+      },
+      "budget": 100.0,
+      "comparison_request": "Compare floor lamps vs table lamps for living room. Which is better for my space?"
     }
   },
   {
     "task_id": "compare_004",
     "task_type": "comparative_reasoning",
-    "instruction": "Help me pick out a winter jacket. I live in Minnesota so it gets really cold. Look at a few options and tell me which is warmest for the price under $200.",
+    "instruction": "Compare machine wash vs hand wash hoodies. Which is more practical?",
     "difficulty": "easy",
-    "expected_actions": 16,
+    "expected_actions": 18,
     "timeout_seconds": 240,
-    "requirements": {
-      "category": "clothing",
-      "attributes": {"type": "winter jacket", "warmth": "extreme cold"},
-      "budget": 200.00,
-      "comparison_request": "Compare warmth ratings and price-to-warmth value"
-    },
     "evaluation_criteria": {
-      "minimum_options_explored": 2,
-      "justification_required": true,
-      "justification_quality_weight": 0.5
+      "comparison_quality_weight": 0.5,
+      "reasoning_clarity_weight": 0.3,
+      "decision_quality_weight": 0.2
+    },
+    "requirements": {
+      "category": "general",
+      "attributes": {
+        "aspects": [
+          "machine wash",
+          "hand wash"
+        ]
+      },
+      "budget": 100.0,
+      "comparison_request": "Compare machine wash vs hand wash hoodies. Which is more practical?"
     }
   },
   {
     "task_id": "compare_005",
     "task_type": "comparative_reasoning",
-    "instruction": "Looking for a good daily face moisturizer. Can you compare a drugstore option vs a higher-end one and tell me if the expensive one is worth it?",
+    "instruction": "I need sneakers. Compare high-top vs low-top styles and suggest best.",
     "difficulty": "easy",
-    "expected_actions": 14,
+    "expected_actions": 18,
     "timeout_seconds": 240,
-    "requirements": {
-      "category": "beauty",
-      "attributes": {"type": "face moisturizer", "use": "daily"},
-      "budget": 60.00,
-      "comparison_request": "Compare budget vs premium option and justify value"
-    },
     "evaluation_criteria": {
-      "minimum_options_explored": 2,
-      "justification_required": true,
-      "justification_quality_weight": 0.5
+      "comparison_quality_weight": 0.5,
+      "reasoning_clarity_weight": 0.3,
+      "decision_quality_weight": 0.2
+    },
+    "requirements": {
+      "category": "general",
+      "attributes": {
+        "aspects": [
+          "high",
+          "low"
+        ]
+      },
+      "budget": 100.0,
+      "comparison_request": "I need sneakers. Compare high-top vs low-top styles and suggest best."
     }
   },
   {
     "task_id": "compare_006",
     "task_type": "comparative_reasoning",
-    "instruction": "I need a new vacuum cleaner for my apartment with hardwood floors and a cat. Compare bagged vs bagless options and corded vs cordless. Which combination would be best for pet hair on hardwood? Budget is $300.",
+    "instruction": "Compare 3 different dress shirts: slim fit machine wash, classic fit hand wash, and loose fit dry clean. Recommend best for business use.",
     "difficulty": "medium",
-    "expected_actions": 22,
+    "expected_actions": 24,
     "timeout_seconds": 300,
-    "requirements": {
-      "category": "home",
-      "attributes": {"type": "vacuum cleaner", "floor_type": "hardwood", "feature": "pet hair"},
-      "budget": 300.00,
-      "comparison_request": "Compare at least 3 options across bagged/bagless and corded/cordless dimensions"
-    },
     "evaluation_criteria": {
-      "minimum_options_explored": 3,
-      "justification_required": true,
-      "justification_quality_weight": 0.6
+      "comparison_quality_weight": 0.45,
+      "reasoning_clarity_weight": 0.35,
+      "decision_quality_weight": 0.2
+    },
+    "requirements": {
+      "category": "general",
+      "attributes": {
+        "aspects": [
+          "slim fit",
+          "classic fit",
+          "loose fit",
+          "business"
+        ]
+      },
+      "budget": 100.0,
+      "comparison_request": "Compare 3 different dress shirts: slim fit machine wash, classic fit hand wash, and loose fit dry clean. Recommend best for business use."
     }
   },
   {
     "task_id": "compare_007",
     "task_type": "comparative_reasoning",
-    "instruction": "I want to get into journaling and I'm trying to decide between a Leuchtturm1917, Moleskine, and Rhodia notebook. Look at all three and tell me which would be best for fountain pen use.",
+    "instruction": "I need home lighting. Compare floor lamp, table lamp, and pendant light for living room. Which provides best ambiance?",
     "difficulty": "medium",
-    "expected_actions": 20,
+    "expected_actions": 24,
     "timeout_seconds": 300,
-    "requirements": {
-      "category": "office",
-      "attributes": {"type": "notebook", "use_case": "journaling", "pen_type": "fountain pen"},
-      "budget": 40.00,
-      "comparison_request": "Compare all three brands on paper quality for fountain pens"
-    },
     "evaluation_criteria": {
-      "minimum_options_explored": 3,
-      "justification_required": true,
-      "justification_quality_weight": 0.6
+      "comparison_quality_weight": 0.45,
+      "reasoning_clarity_weight": 0.35,
+      "decision_quality_weight": 0.2
+    },
+    "requirements": {
+      "category": "general",
+      "attributes": {
+        "aspects": [
+          "floor",
+          "table",
+          "pendant",
+          "living room"
+        ]
+      },
+      "budget": 100.0,
+      "comparison_request": "I need home lighting. Compare floor lamp, table lamp, and pendant light for living room. Which provides best ambiance?"
     }
   },
   {
     "task_id": "compare_008",
     "task_type": "comparative_reasoning",
-    "instruction": "I'm buying a stand mixer and trying to decide between KitchenAid and Cuisinart. I mostly bake bread and heavy cookie doughs. Compare the motor power, bowl capacity, and durability. Budget is $400.",
+    "instruction": "Beauty products comparison: compare cruelty-free vs organic vs natural ingredients body care. Which is healthiest?",
     "difficulty": "medium",
-    "expected_actions": 22,
+    "expected_actions": 24,
     "timeout_seconds": 300,
-    "requirements": {
-      "category": "kitchen",
-      "attributes": {"type": "stand mixer", "use_case": "bread baking"},
-      "budget": 400.00,
-      "comparison_request": "Compare brands on motor power, capacity, and build quality for heavy use"
-    },
     "evaluation_criteria": {
-      "minimum_options_explored": 3,
-      "justification_required": true,
-      "justification_quality_weight": 0.6
+      "comparison_quality_weight": 0.45,
+      "reasoning_clarity_weight": 0.35,
+      "decision_quality_weight": 0.2
+    },
+    "requirements": {
+      "category": "general",
+      "attributes": {
+        "aspects": [
+          "cruelty free",
+          "organic",
+          "natural"
+        ]
+      },
+      "budget": 100.0,
+      "comparison_request": "Beauty products comparison: compare cruelty-free vs organic vs natural ingredients body care. Which is healthiest?"
     }
   },
   {
     "task_id": "compare_009",
     "task_type": "comparative_reasoning",
-    "instruction": "Help me choose between a few different protein powders. I want something that tastes good, mixes well, and has at least 25g protein per serving. Compare whey vs plant-based options.",
+    "instruction": "Footwear decision: compare loafers, sneakers, and slip-ons for daily wear comfort and style. What's best?",
     "difficulty": "medium",
-    "expected_actions": 20,
+    "expected_actions": 24,
     "timeout_seconds": 300,
-    "requirements": {
-      "category": "health",
-      "attributes": {"type": "protein powder", "min_protein": "25g"},
-      "budget": 50.00,
-      "comparison_request": "Compare taste, mixability, and protein content across whey and plant options"
-    },
     "evaluation_criteria": {
-      "minimum_options_explored": 3,
-      "justification_required": true,
-      "justification_quality_weight": 0.6
+      "comparison_quality_weight": 0.45,
+      "reasoning_clarity_weight": 0.35,
+      "decision_quality_weight": 0.2
+    },
+    "requirements": {
+      "category": "general",
+      "attributes": {
+        "aspects": [
+          "loafers",
+          "sneakers",
+          "slip-ons"
+        ]
+      },
+      "budget": 100.0,
+      "comparison_request": "Footwear decision: compare loafers, sneakers, and slip-ons for daily wear comfort and style. What's best?"
     }
   },
   {
     "task_id": "compare_010",
     "task_type": "comparative_reasoning",
-    "instruction": "I need new running shoes for marathon training. I overpronate slightly. Compare stability shoes from different brands and tell me which would be best for long distances. Budget is $160.",
+    "instruction": "Clothing fit analysis: compare slim fit, classic fit, and loose fit men's shirts. Which is most versatile?",
     "difficulty": "medium",
     "expected_actions": 24,
     "timeout_seconds": 300,
-    "requirements": {
-      "category": "sports",
-      "attributes": {"type": "running shoes", "feature": "stability", "use_case": "marathon training"},
-      "budget": 160.00,
-      "comparison_request": "Compare stability features, cushioning, and durability for long-distance running"
-    },
     "evaluation_criteria": {
-      "minimum_options_explored": 3,
-      "justification_required": true,
-      "justification_quality_weight": 0.6
+      "comparison_quality_weight": 0.45,
+      "reasoning_clarity_weight": 0.35,
+      "decision_quality_weight": 0.2
+    },
+    "requirements": {
+      "category": "general",
+      "attributes": {
+        "aspects": [
+          "slim fit",
+          "classic fit",
+          "loose fit"
+        ]
+      },
+      "budget": 100.0,
+      "comparison_request": "Clothing fit analysis: compare slim fit, classic fit, and loose fit men's shirts. Which is most versatile?"
     }
   },
   {
     "task_id": "compare_011",
     "task_type": "comparative_reasoning",
-    "instruction": "I'm looking for a good office chair for working from home. I have back problems so ergonomics is crucial. Compare mesh vs leather options, and look at lumbar support features. Budget is $500.",
-    "difficulty": "medium",
-    "expected_actions": 24,
-    "timeout_seconds": 300,
-    "requirements": {
-      "category": "office",
-      "attributes": {"type": "office chair", "feature": "ergonomic", "priority": "lumbar support"},
-      "budget": 500.00,
-      "comparison_request": "Compare mesh vs leather chairs on ergonomics and lumbar support"
-    },
+    "instruction": "Complete wardrobe analysis: compare 4 dress shirt options (slim fit long sleeve, classic fit short sleeve, loose fit machine wash, slim fit hand wash). Consider fit, care, sleeve length, and value. Make final recommendation.",
+    "difficulty": "hard",
+    "expected_actions": 30,
+    "timeout_seconds": 360,
     "evaluation_criteria": {
-      "minimum_options_explored": 3,
-      "justification_required": true,
-      "justification_quality_weight": 0.6
+      "comparison_quality_weight": 0.4,
+      "reasoning_clarity_weight": 0.4,
+      "decision_quality_weight": 0.2
+    },
+    "requirements": {
+      "category": "general",
+      "attributes": {
+        "aspects": [
+          "fit",
+          "care",
+          "sleeve",
+          "value"
+        ]
+      },
+      "budget": 100.0,
+      "comparison_request": "Complete wardrobe analysis: compare 4 dress shirt options (slim fit long sleeve, classic fit short sleeve, loose fit machine wash, slim fit hand wash). Consider fit, care, sleeve length, and value. Make final recommendation."
     }
   },
   {
     "task_id": "compare_012",
     "task_type": "comparative_reasoning",
-    "instruction": "I want to upgrade my coffee setup. Compare a few pour-over methods: Chemex vs V60 vs Kalita Wave. I like a clean, bright cup. Which method and which specific product should I get?",
-    "difficulty": "medium",
-    "expected_actions": 22,
-    "timeout_seconds": 300,
-    "requirements": {
-      "category": "kitchen",
-      "attributes": {"type": "pour-over coffee maker", "taste_profile": "clean and bright"},
-      "budget": 60.00,
-      "comparison_request": "Compare three pour-over methods on taste characteristics and ease of use"
-    },
+    "instruction": "Home furnishing decision: compare 4 lamp types (floor lamp bronze, table lamp mid century, pendant glass, chandelier steel) for living room. Analyze style compatibility, lighting quality, and price. Choose best.",
+    "difficulty": "hard",
+    "expected_actions": 30,
+    "timeout_seconds": 360,
     "evaluation_criteria": {
-      "minimum_options_explored": 3,
-      "justification_required": true,
-      "justification_quality_weight": 0.6
+      "comparison_quality_weight": 0.4,
+      "reasoning_clarity_weight": 0.4,
+      "decision_quality_weight": 0.2
+    },
+    "requirements": {
+      "category": "general",
+      "attributes": {
+        "aspects": [
+          "style",
+          "quality",
+          "price",
+          "living room"
+        ]
+      },
+      "budget": 100.0,
+      "comparison_request": "Home furnishing decision: compare 4 lamp types (floor lamp bronze, table lamp mid century, pendant glass, chandelier steel) for living room. Analyze style compatibility, lighting quality, and price. Choose best."
     }
   },
   {
     "task_id": "compare_013",
     "task_type": "comparative_reasoning",
-    "instruction": "I need a new laptop for video editing. Compare at least 4 options across different price points from $1000-$2000. I need to understand the tradeoffs between screen quality, processing power, RAM, and storage. Also consider thermals since video editing gets hot.",
+    "instruction": "Skincare routine optimization: compare 4 body care products (cruelty free natural, organic sensitive skin, dermatologist tested, eco friendly). Evaluate certifications, ingredients, skin compatibility. Recommend optimal choice.",
     "difficulty": "hard",
-    "expected_actions": 35,
+    "expected_actions": 30,
     "timeout_seconds": 360,
-    "requirements": {
-      "category": "electronics",
-      "attributes": {"type": "laptop", "use_case": "video editing"},
-      "budget": 2000.00,
-      "comparison_request": "Compare 4+ options on display, CPU, RAM, storage, and thermal performance"
-    },
     "evaluation_criteria": {
-      "minimum_options_explored": 4,
-      "justification_required": true,
-      "justification_quality_weight": 0.7
+      "comparison_quality_weight": 0.4,
+      "reasoning_clarity_weight": 0.4,
+      "decision_quality_weight": 0.2
+    },
+    "requirements": {
+      "category": "general",
+      "attributes": {
+        "aspects": [
+          "certification",
+          "ingredients",
+          "skin type"
+        ]
+      },
+      "budget": 100.0,
+      "comparison_request": "Skincare routine optimization: compare 4 body care products (cruelty free natural, organic sensitive skin, dermatologist tested, eco friendly). Evaluate certifications, ingredients, skin compatibility. Recommend optimal choice."
     }
   },
   {
     "task_id": "compare_014",
     "task_type": "comparative_reasoning",
-    "instruction": "I'm setting up a home gym and need to choose between several adjustable dumbbell sets. Compare Bowflex, PowerBlock, NordicTrack, and Nuobell. I have limited space and need weights from 5-50 lbs. Consider adjustment mechanism, durability, feel, and footprint. Budget is $500.",
+    "instruction": "Footwear collection strategy: compare 4 shoe types (loafers rubber sole, sneakers fashion, slippers memory foam, boots leather). Analyze comfort, durability, versatility, style. Select best all-around option.",
     "difficulty": "hard",
-    "expected_actions": 32,
+    "expected_actions": 30,
     "timeout_seconds": 360,
-    "requirements": {
-      "category": "sports",
-      "attributes": {"type": "adjustable dumbbells", "weight_range": "5-50 lbs"},
-      "budget": 500.00,
-      "comparison_request": "Compare 4 brands on adjustment mechanism, build quality, ergonomics, and space efficiency"
-    },
     "evaluation_criteria": {
-      "minimum_options_explored": 4,
-      "justification_required": true,
-      "justification_quality_weight": 0.7
+      "comparison_quality_weight": 0.4,
+      "reasoning_clarity_weight": 0.4,
+      "decision_quality_weight": 0.2
+    },
+    "requirements": {
+      "category": "general",
+      "attributes": {
+        "aspects": [
+          "comfort",
+          "durability",
+          "versatility"
+        ]
+      },
+      "budget": 100.0,
+      "comparison_request": "Footwear collection strategy: compare 4 shoe types (loafers rubber sole, sneakers fashion, slippers memory foam, boots leather). Analyze comfort, durability, versatility, style. Select best all-around option."
     }
   },
   {
     "task_id": "compare_015",
     "task_type": "comparative_reasoning",
-    "instruction": "I need an all-in-one skincare routine. Compare complete skincare sets from different brands (like CeraVe, The Ordinary, La Roche-Posay, Paula's Choice). I have combination skin with occasional acne. Evaluate cleanser, treatment, and moisturizer for each. Which complete set gives the best results for my skin type? Budget is $100.",
+    "instruction": "Wardrobe essentials: compare 4 clothing items (dress shirt slim fit, hoodie machine wash, shorts elastic waist, pants classic fit). Consider occasion versatility, care requirements, fit preferences. Pick most essential.",
     "difficulty": "hard",
-    "expected_actions": 35,
+    "expected_actions": 30,
     "timeout_seconds": 360,
-    "requirements": {
-      "category": "beauty",
-      "attributes": {"type": "skincare set", "skin_type": "combination", "concern": "acne"},
-      "budget": 100.00,
-      "comparison_request": "Compare 4 brand systems on cleanser, treatment, moisturizer efficacy for combination acne-prone skin"
-    },
     "evaluation_criteria": {
-      "minimum_options_explored": 4,
-      "justification_required": true,
-      "justification_quality_weight": 0.7
+      "comparison_quality_weight": 0.4,
+      "reasoning_clarity_weight": 0.4,
+      "decision_quality_weight": 0.2
+    },
+    "requirements": {
+      "category": "general",
+      "attributes": {
+        "aspects": [
+          "versatility",
+          "care",
+          "fit"
+        ]
+      },
+      "budget": 100.0,
+      "comparison_request": "Wardrobe essentials: compare 4 clothing items (dress shirt slim fit, hoodie machine wash, shorts elastic waist, pants classic fit). Consider occasion versatility, care requirements, fit preferences. Pick most essential."
     }
   }
 ]

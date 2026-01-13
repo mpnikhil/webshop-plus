@@ -2,25 +2,29 @@
   {
     "task_id": "memory_001",
     "task_type": "preference_memory",
-    "instruction": "Remember what I bought before. I need another t-shirt in the same color.",
+    "instruction": "Remember what I bought before. I need another dress shirt in the same style.",
     "difficulty": "easy",
     "expected_actions": 10,
     "timeout_seconds": 180,
     "session_sequence": [
       {
         "session_id": "memory_001_s1",
-        "instruction": "I need a blue cotton t-shirt, size medium.",
+        "instruction": "I need a slim fit dress shirt with long sleeves, machine washable.",
         "establishes": {
-          "color": "blue",
-          "size": "medium",
-          "material": "cotton",
-          "category": "t-shirt"
+          "fit": "slim fit",
+          "sleeve": "long sleeve",
+          "care": "machine wash",
+          "category": "dress shirt"
         }
       }
     ],
     "memory_test": {
-      "attribute_to_recall": "color",
-      "acceptable_values": ["blue", "navy", "navy blue"]
+      "attribute_to_recall": "fit",
+      "acceptable_values": [
+        "slim fit",
+        "slim",
+        "tailored"
+      ]
     },
     "evaluation_criteria": {
       "recall_accuracy_weight": 0.6,
@@ -30,24 +34,27 @@
   {
     "task_id": "memory_002",
     "task_type": "preference_memory",
-    "instruction": "I want to buy another pair of sneakers like the ones I got last time. Make sure they're the same size.",
+    "instruction": "I want to buy another pair of shoes like the ones I got last time. Make sure they're the same type.",
     "difficulty": "easy",
     "expected_actions": 12,
     "timeout_seconds": 180,
     "session_sequence": [
       {
         "session_id": "memory_002_s1",
-        "instruction": "Find me some white running sneakers in size 10.",
+        "instruction": "Find me men's loafers with rubber sole.",
         "establishes": {
-          "color": "white",
-          "size": "10",
-          "type": "running sneakers"
+          "type": "loafers",
+          "sole": "rubber sole"
         }
       }
     ],
     "memory_test": {
-      "attribute_to_recall": "size",
-      "acceptable_values": ["10", "size 10", "US 10"]
+      "attribute_to_recall": "type",
+      "acceptable_values": [
+        "loafers",
+        "slip-ons",
+        "loafer"
+      ]
     },
     "evaluation_criteria": {
       "recall_accuracy_weight": 0.6,
@@ -57,24 +64,28 @@
   {
     "task_id": "memory_003",
     "task_type": "preference_memory",
-    "instruction": "Get me a matching backpack to go with my laptop sleeve. You remember the brand I like, right?",
+    "instruction": "Get me a matching lamp to go with my room setup. You remember the style I like, right?",
     "difficulty": "easy",
     "expected_actions": 10,
     "timeout_seconds": 180,
     "session_sequence": [
       {
         "session_id": "memory_003_s1",
-        "instruction": "I want a JanSport laptop sleeve in black.",
+        "instruction": "I want a mid century floor lamp for my living room.",
         "establishes": {
-          "brand": "JanSport",
-          "color": "black",
-          "category": "laptop sleeve"
+          "style": "mid century",
+          "type": "floor lamp",
+          "room": "living room"
         }
       }
     ],
     "memory_test": {
-      "attribute_to_recall": "brand",
-      "acceptable_values": ["JanSport", "Jansport", "jansport"]
+      "attribute_to_recall": "style",
+      "acceptable_values": [
+        "mid century",
+        "mid-century",
+        "midcentury"
+      ]
     },
     "evaluation_criteria": {
       "recall_accuracy_weight": 0.6,
@@ -84,24 +95,27 @@
   {
     "task_id": "memory_004",
     "task_type": "preference_memory",
-    "instruction": "I need more of that shampoo I bought before. Get me the same brand.",
+    "instruction": "I need more of that shampoo I bought before. Get me the same type.",
     "difficulty": "easy",
     "expected_actions": 8,
     "timeout_seconds": 180,
     "session_sequence": [
       {
         "session_id": "memory_004_s1",
-        "instruction": "I want a bottle of Pantene Pro-V shampoo for dry hair.",
+        "instruction": "I want sulfate-free shampoo for dry hair.",
         "establishes": {
-          "brand": "Pantene",
-          "product_line": "Pro-V",
+          "free_of": "sulfate free",
           "hair_type": "dry"
         }
       }
     ],
     "memory_test": {
-      "attribute_to_recall": "brand",
-      "acceptable_values": ["Pantene", "Pantene Pro-V", "pantene"]
+      "attribute_to_recall": "free_of",
+      "acceptable_values": [
+        "sulfate free",
+        "sulfate-free",
+        "no sulfate"
+      ]
     },
     "evaluation_criteria": {
       "recall_accuracy_weight": 0.6,
@@ -111,24 +125,28 @@
   {
     "task_id": "memory_005",
     "task_type": "preference_memory",
-    "instruction": "Buy me another phone charger in the same length as before.",
+    "instruction": "Buy me another hoodie in the same fit as before.",
     "difficulty": "easy",
     "expected_actions": 10,
     "timeout_seconds": 180,
     "session_sequence": [
       {
         "session_id": "memory_005_s1",
-        "instruction": "I need a 6-foot USB-C charging cable.",
+        "instruction": "I need a machine washable hoodie in slim fit.",
         "establishes": {
-          "length": "6 feet",
-          "type": "USB-C",
-          "category": "charging cable"
+          "fit": "slim fit",
+          "care": "machine wash",
+          "category": "hoodie"
         }
       }
     ],
     "memory_test": {
-      "attribute_to_recall": "length",
-      "acceptable_values": ["6 feet", "6ft", "6-foot", "6 foot"]
+      "attribute_to_recall": "fit",
+      "acceptable_values": [
+        "slim fit",
+        "slim",
+        "fitted"
+      ]
     },
     "evaluation_criteria": {
       "recall_accuracy_weight": 0.6,
@@ -138,25 +156,28 @@
   {
     "task_id": "memory_006",
     "task_type": "preference_memory",
-    "instruction": "I need a new dress for a party. Based on what I bought before, you know I prefer a certain style and color. Find something similar.",
+    "instruction": "I need home decor. Based on what I bought before, you know I prefer a certain style. Find something similar.",
     "difficulty": "medium",
     "expected_actions": 15,
     "timeout_seconds": 240,
     "session_sequence": [
       {
         "session_id": "memory_006_s1",
-        "instruction": "I want a black cocktail dress, size 8, something elegant.",
+        "instruction": "I want a decorative throw pillow for my living room, something super soft.",
         "establishes": {
-          "color": "black",
-          "style": "cocktail",
-          "size": "8",
-          "vibe": "elegant"
+          "type": "throw pillow",
+          "room": "living room",
+          "texture": "super soft"
         }
       }
     ],
     "memory_test": {
-      "attribute_to_recall": "style",
-      "acceptable_values": ["cocktail", "cocktail dress", "elegant", "party dress"]
+      "attribute_to_recall": "room",
+      "acceptable_values": [
+        "living room",
+        "living",
+        "livingroom"
+      ]
     },
     "evaluation_criteria": {
       "recall_accuracy_weight": 0.5,
@@ -166,25 +187,27 @@
   {
     "task_id": "memory_007",
     "task_type": "preference_memory",
-    "instruction": "I want to buy a gift for my mom. Remember what I got for her birthday before? Get something in that same style.",
+    "instruction": "I want electronics accessories. Remember what I got for my phone before? Get something compatible.",
     "difficulty": "medium",
     "expected_actions": 15,
     "timeout_seconds": 240,
     "session_sequence": [
       {
         "session_id": "memory_007_s1",
-        "instruction": "I want to buy my mom a floral silk scarf for her birthday.",
+        "instruction": "I want a screen protector with tempered glass for my phone.",
         "establishes": {
-          "recipient": "mom",
-          "pattern": "floral",
-          "material": "silk",
-          "item_type": "scarf"
+          "type": "screen protector",
+          "material": "tempered glass"
         }
       }
     ],
     "memory_test": {
-      "attribute_to_recall": "pattern",
-      "acceptable_values": ["floral", "floral print", "flowers", "flower pattern"]
+      "attribute_to_recall": "material",
+      "acceptable_values": [
+        "tempered glass",
+        "glass",
+        "tempered"
+      ]
     },
     "evaluation_criteria": {
       "recall_accuracy_weight": 0.5,
@@ -194,24 +217,27 @@
   {
     "task_id": "memory_008",
     "task_type": "preference_memory",
-    "instruction": "I need to restock my skincare. I'm very particular about the brand I use - get me a moisturizer from the same brand as my previous purchase.",
+    "instruction": "I need to restock my skincare. I'm very particular about certifications - get me body care from the same certification standard as my previous purchase.",
     "difficulty": "medium",
     "expected_actions": 12,
     "timeout_seconds": 240,
     "session_sequence": [
       {
         "session_id": "memory_008_s1",
-        "instruction": "Get me a CeraVe facial cleanser for sensitive skin.",
+        "instruction": "Get me cruelty-free body care products for sensitive skin.",
         "establishes": {
-          "brand": "CeraVe",
-          "skin_type": "sensitive",
-          "category": "facial cleanser"
+          "certification": "cruelty free",
+          "skin_type": "sensitive"
         }
       }
     ],
     "memory_test": {
-      "attribute_to_recall": "brand",
-      "acceptable_values": ["CeraVe", "Cerave", "cerave"]
+      "attribute_to_recall": "certification",
+      "acceptable_values": [
+        "cruelty free",
+        "cruelty-free",
+        "no animal testing"
+      ]
     },
     "evaluation_criteria": {
       "recall_accuracy_weight": 0.6,
@@ -221,25 +247,28 @@
   {
     "task_id": "memory_009",
     "task_type": "preference_memory",
-    "instruction": "I'm buying more workout clothes. Remember my size from last time? I want matching leggings to go with the sports bra I bought.",
+    "instruction": "I'm buying more workout clothes. Remember my fit preference from last time? I want shorts to match.",
     "difficulty": "medium",
     "expected_actions": 14,
     "timeout_seconds": 240,
     "session_sequence": [
       {
         "session_id": "memory_009_s1",
-        "instruction": "I want a Nike sports bra in size small, preferably in purple.",
+        "instruction": "I want men's athletic t-shirts in slim fit.",
         "establishes": {
-          "brand": "Nike",
-          "size": "small",
-          "color": "purple",
-          "category": "sports bra"
+          "fit": "slim fit",
+          "type": "t-shirts",
+          "use": "athletic"
         }
       }
     ],
     "memory_test": {
-      "attribute_to_recall": "size",
-      "acceptable_values": ["small", "S", "size small"]
+      "attribute_to_recall": "fit",
+      "acceptable_values": [
+        "slim fit",
+        "slim",
+        "fitted"
+      ]
     },
     "evaluation_criteria": {
       "recall_accuracy_weight": 0.5,
@@ -249,24 +278,27 @@
   {
     "task_id": "memory_010",
     "task_type": "preference_memory",
-    "instruction": "I need more coffee pods. Get me the same roast type I ordered before.",
+    "instruction": "I need more footwear. Get me shoes with the same sole type I ordered before.",
     "difficulty": "medium",
     "expected_actions": 10,
     "timeout_seconds": 240,
     "session_sequence": [
       {
         "session_id": "memory_010_s1",
-        "instruction": "I want a box of Nespresso dark roast coffee pods.",
+        "instruction": "I want men's fashion sneakers with rubber outsole.",
         "establishes": {
-          "brand": "Nespresso",
-          "roast": "dark roast",
-          "format": "pods"
+          "type": "sneakers",
+          "sole": "rubber outsole"
         }
       }
     ],
     "memory_test": {
-      "attribute_to_recall": "roast",
-      "acceptable_values": ["dark roast", "dark", "bold", "intense"]
+      "attribute_to_recall": "sole",
+      "acceptable_values": [
+        "rubber outsole",
+        "rubber sole",
+        "rubber"
+      ]
     },
     "evaluation_criteria": {
       "recall_accuracy_weight": 0.6,
@@ -276,97 +308,123 @@
   {
     "task_id": "memory_011",
     "task_type": "preference_memory",
-    "instruction": "I want to expand my book collection. Based on what I've read before, find me another book in the same genre by a different author.",
-    "difficulty": "medium",
-    "expected_actions": 14,
-    "timeout_seconds": 240,
-    "session_sequence": [
-      {
-        "session_id": "memory_011_s1",
-        "instruction": "I want to buy the mystery novel 'The Silent Patient' by Alex Michaelides.",
-        "establishes": {
-          "genre": "mystery",
-          "format": "novel",
-          "title": "The Silent Patient",
-          "author": "Alex Michaelides"
-        }
-      }
-    ],
-    "memory_test": {
-      "attribute_to_recall": "genre",
-      "acceptable_values": ["mystery", "thriller", "psychological thriller", "suspense"]
-    },
-    "evaluation_criteria": {
-      "recall_accuracy_weight": 0.5,
-      "consistency_weight": 0.5
-    }
-  },
-  {
-    "task_id": "memory_012",
-    "task_type": "preference_memory",
-    "instruction": "My dog loved the treats I got before. Order another bag of the same brand and flavor.",
-    "difficulty": "medium",
-    "expected_actions": 12,
-    "timeout_seconds": 240,
-    "session_sequence": [
-      {
-        "session_id": "memory_012_s1",
-        "instruction": "Get me a bag of Blue Buffalo chicken-flavored dog treats.",
-        "establishes": {
-          "brand": "Blue Buffalo",
-          "flavor": "chicken",
-          "pet_type": "dog",
-          "category": "treats"
-        }
-      }
-    ],
-    "memory_test": {
-      "attribute_to_recall": "flavor",
-      "acceptable_values": ["chicken", "chicken flavor", "chicken-flavored"]
-    },
-    "evaluation_criteria": {
-      "recall_accuracy_weight": 0.5,
-      "consistency_weight": 0.5
-    }
-  },
-  {
-    "task_id": "memory_013",
-    "task_type": "preference_memory",
-    "instruction": "I've been building my wardrobe consistently. You remember my previous purchases - I need dress shirts that match my style preferences from our past shopping sessions.",
+    "instruction": "I've been building my wardrobe consistently. You remember my preferences - I need more dress shirts that match my style from our past shopping sessions.",
     "difficulty": "hard",
     "expected_actions": 20,
     "timeout_seconds": 300,
     "session_sequence": [
       {
-        "session_id": "memory_013_s1",
-        "instruction": "I want a slim-fit white button-down shirt in size large.",
+        "session_id": "memory_011_s1",
+        "instruction": "I want a slim-fit dress shirt with long sleeves, machine washable.",
         "establishes": {
-          "fit": "slim-fit",
-          "size": "large",
-          "style": "button-down"
+          "fit": "slim fit",
+          "sleeve": "long sleeve",
+          "care": "machine wash"
         }
       },
       {
-        "session_id": "memory_013_s2",
-        "instruction": "Get me another slim-fit dress shirt, this time in light blue, same size.",
+        "session_id": "memory_011_s2",
+        "instruction": "Get me another dress shirt in slim fit, this time short sleeves.",
         "establishes": {
-          "color": "light blue",
-          "pattern": "solid",
-          "confirms_size": "large"
-        }
-      },
-      {
-        "session_id": "memory_013_s3",
-        "instruction": "I need a blazer that matches my shirts. Navy blue, slim-fit, size large.",
-        "establishes": {
-          "complementary_item": "blazer",
-          "blazer_color": "navy blue"
+          "confirms_fit": "slim fit",
+          "sleeve": "short sleeve"
         }
       }
     ],
     "memory_test": {
       "attribute_to_recall": "fit",
-      "acceptable_values": ["slim-fit", "slim fit", "slim", "tailored"]
+      "acceptable_values": [
+        "slim fit",
+        "slim",
+        "tailored",
+        "fitted"
+      ]
+    },
+    "evaluation_criteria": {
+      "recall_accuracy_weight": 0.4,
+      "consistency_weight": 0.6
+    }
+  },
+  {
+    "task_id": "memory_012",
+    "task_type": "preference_memory",
+    "instruction": "I'm redecorating and want everything to match. Based on my previous home decor purchases, find me lighting that complements my established style.",
+    "difficulty": "hard",
+    "expected_actions": 18,
+    "timeout_seconds": 300,
+    "session_sequence": [
+      {
+        "session_id": "memory_012_s1",
+        "instruction": "I want a mid century table lamp with a bronze finish.",
+        "establishes": {
+          "style": "mid century",
+          "finish": "bronze finish",
+          "type": "table lamp"
+        }
+      },
+      {
+        "session_id": "memory_012_s2",
+        "instruction": "Find me a pendant light that matches my mid century style.",
+        "establishes": {
+          "confirms_style": "mid century",
+          "type": "pendant"
+        }
+      }
+    ],
+    "memory_test": {
+      "attribute_to_recall": "style",
+      "acceptable_values": [
+        "mid century",
+        "mid-century",
+        "midcentury"
+      ]
+    },
+    "evaluation_criteria": {
+      "recall_accuracy_weight": 0.4,
+      "consistency_weight": 0.6
+    }
+  },
+  {
+    "task_id": "memory_013",
+    "task_type": "preference_memory",
+    "instruction": "You've helped me shop for my wardrobe before. I'm looking for casual shirts. Make sure they fit with my size and style preferences.",
+    "difficulty": "hard",
+    "expected_actions": 22,
+    "timeout_seconds": 300,
+    "session_sequence": [
+      {
+        "session_id": "memory_013_s1",
+        "instruction": "I want men's t-shirts with short sleeves, machine washable.",
+        "establishes": {
+          "sleeve": "short sleeve",
+          "care": "machine wash",
+          "category": "t-shirts"
+        }
+      },
+      {
+        "session_id": "memory_013_s2",
+        "instruction": "Get me a hoodie, machine washable like my other clothes.",
+        "establishes": {
+          "confirms_care": "machine wash",
+          "category": "hoodie"
+        }
+      },
+      {
+        "session_id": "memory_013_s3",
+        "instruction": "I need casual shorts, machine washable.",
+        "establishes": {
+          "confirms_care": "machine wash",
+          "category": "shorts"
+        }
+      }
+    ],
+    "memory_test": {
+      "attribute_to_recall": "care",
+      "acceptable_values": [
+        "machine wash",
+        "machine washable",
+        "washer safe"
+      ]
     },
     "evaluation_criteria": {
       "recall_accuracy_weight": 0.4,
@@ -376,40 +434,35 @@
   {
     "task_id": "memory_014",
     "task_type": "preference_memory",
-    "instruction": "I'm redecorating and want everything to match. Based on my previous home decor purchases, find me a throw blanket that complements my established aesthetic.",
+    "instruction": "I'm building my beauty routine. Based on what I've purchased, find me more skincare that fits my established preferences.",
     "difficulty": "hard",
     "expected_actions": 18,
     "timeout_seconds": 300,
     "session_sequence": [
       {
         "session_id": "memory_014_s1",
-        "instruction": "I want a set of bohemian-style throw pillows with earth tones.",
+        "instruction": "I want cruelty-free body treatments with natural ingredients.",
         "establishes": {
-          "style": "bohemian",
-          "color_palette": "earth tones",
-          "category": "throw pillows"
+          "certification": "cruelty free",
+          "ingredients": "natural ingredients"
         }
       },
       {
         "session_id": "memory_014_s2",
-        "instruction": "Find me a woven basket for storage that matches my boho style.",
+        "instruction": "Find me a scrub that's cruelty-free like my other products.",
         "establishes": {
-          "material": "woven",
-          "confirms_style": "bohemian"
-        }
-      },
-      {
-        "session_id": "memory_014_s3",
-        "instruction": "I need a macrame wall hanging in natural colors.",
-        "establishes": {
-          "decorative_style": "macrame",
-          "confirms_color_palette": "natural"
+          "confirms_certification": "cruelty free",
+          "type": "scrub"
         }
       }
     ],
     "memory_test": {
-      "attribute_to_recall": "style",
-      "acceptable_values": ["bohemian", "boho", "boho-chic", "bohemian style"]
+      "attribute_to_recall": "certification",
+      "acceptable_values": [
+        "cruelty free",
+        "cruelty-free",
+        "no animal testing"
+      ]
     },
     "evaluation_criteria": {
       "recall_accuracy_weight": 0.4,
@@ -419,42 +472,44 @@
   {
     "task_id": "memory_015",
     "task_type": "preference_memory",
-    "instruction": "You've helped me shop for my kitchen before. I'm looking for a new set of mixing bowls. Make sure they fit with my kitchen color scheme and brand preferences.",
+    "instruction": "You've helped me furnish my living room. I need additional furniture pieces that match what we've chosen.",
     "difficulty": "hard",
     "expected_actions": 22,
     "timeout_seconds": 300,
     "session_sequence": [
       {
         "session_id": "memory_015_s1",
-        "instruction": "I want a KitchenAid stand mixer in red.",
+        "instruction": "I want a floor lamp for my living room.",
         "establishes": {
-          "brand": "KitchenAid",
-          "color": "red",
-          "category": "stand mixer"
+          "room": "living room",
+          "type": "floor lamp"
         }
       },
       {
         "session_id": "memory_015_s2",
-        "instruction": "Get me a set of KitchenAid measuring cups in red to match.",
+        "instruction": "Get me a coffee table for the living room that's easy to assemble.",
         "establishes": {
-          "confirms_brand": "KitchenAid",
-          "confirms_color": "red",
-          "category": "measuring cups"
+          "confirms_room": "living room",
+          "type": "coffee table",
+          "assembly": "easy assemble"
         }
       },
       {
         "session_id": "memory_015_s3",
-        "instruction": "I need a red silicone spatula set, preferably KitchenAid if they have one.",
+        "instruction": "I need decorative pillows for the living room.",
         "establishes": {
-          "material": "silicone",
-          "confirms_color": "red",
-          "brand_preference": "KitchenAid"
+          "confirms_room": "living room",
+          "type": "pillows"
         }
       }
     ],
     "memory_test": {
-      "attribute_to_recall": "color",
-      "acceptable_values": ["red", "empire red", "crimson"]
+      "attribute_to_recall": "room",
+      "acceptable_values": [
+        "living room",
+        "living",
+        "livingroom"
+      ]
     },
     "evaluation_criteria": {
       "recall_accuracy_weight": 0.4,
