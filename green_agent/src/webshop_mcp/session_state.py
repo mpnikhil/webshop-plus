@@ -43,6 +43,8 @@ class SessionState:
     turn_count: int = 0
     completed: bool = False
     history: list[dict[str, Any]] = field(default_factory=list)
+    # Agent reasoning captured from purple agent's A2A completion
+    reasoning_summary: str = ""
 
     def get_cart_total(self) -> float:
         """Calculate total price of items in cart.
@@ -92,6 +94,40 @@ class SessionState:
         total = self.get_cart_total()
         return {
             "added": cart_item["name"],
+            "cart_total": total,
+            "budget": self.budget,
+            "over_budget": total > self.budget,
+            "cart_size": len(self.cart),
+        }
+
+    def remove_from_cart(self, item_index: int) -> dict[str, Any]:
+        """Remove item from cart by index.
+
+        Args:
+            item_index: Index of item to remove (0-based).
+
+        Returns:
+            Status dict with cart state after removal, or error if invalid index.
+        """
+        if item_index < 0 or item_index >= len(self.cart):
+            return {
+                "error": f"Invalid index {item_index}. Cart has {len(self.cart)} items.",
+                "cart_size": len(self.cart),
+            }
+
+        removed_item = self.cart.pop(item_index)
+
+        # Record in history
+        self.history.append({
+            "action": "remove_from_cart",
+            "item_index": item_index,
+            "removed_product": removed_item,
+            "turn": self.turn_count,
+        })
+
+        total = self.get_cart_total()
+        return {
+            "removed": removed_item["name"],
             "cart_total": total,
             "budget": self.budget,
             "over_budget": total > self.budget,

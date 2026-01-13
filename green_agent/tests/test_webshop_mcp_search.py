@@ -228,7 +228,7 @@ class TestSearchReturnsProductsWithIds:
         # WebShop has a different price for this ASIN
         webshop = MockWebShop(
             search_results_html=html,
-            prices={"B001": 45.00},
+            prices={"B001234567": 45.00},
         )
 
         state, token = setup_session(webshop=webshop)
@@ -258,7 +258,7 @@ class TestSearchUpdatesVisibleElements:
 
             assert "p1" in state.visible_elements
             assert state.visible_elements["p1"]["type"] == "product"
-            assert state.visible_elements["p1"]["asin"] == "B001"
+            assert state.visible_elements["p1"]["asin"] == "B001234567"
         finally:
             current_session_id.reset(token)
 

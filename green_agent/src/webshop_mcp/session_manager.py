@@ -87,6 +87,7 @@ class SessionManager:
         constraints: list[str] | None = None,
         max_turns: int = 30,
         webshop: Any | None = None,
+        initial_cart: list[dict[str, Any]] | None = None,
     ) -> SessionState:
         """Create a new session with state registered to the global MCP server.
 
@@ -97,6 +98,7 @@ class SessionManager:
             constraints: Optional list of constraints.
             max_turns: Maximum actions before session terminates. Default: 30.
             webshop: Optional WebShop interface (for testing).
+            initial_cart: Optional list of cart items to pre-populate (for error_recovery tasks).
 
         Returns:
             SessionState instance for this session.
@@ -119,6 +121,7 @@ class SessionManager:
                 budget=budget,
                 constraints=constraints or [],
                 max_turns=max_turns,
+                cart=initial_cart or [],
             )
 
             # Register with global MCP server

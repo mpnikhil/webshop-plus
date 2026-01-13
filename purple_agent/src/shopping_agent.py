@@ -34,6 +34,7 @@ import structlog
 from google.adk import Agent, Runner
 from google.adk.events import Event
 from google.adk.models.lite_llm import LiteLlm
+from google.adk.runners import RunConfig
 from google.adk.sessions import InMemorySessionService
 from google.adk.tools import McpToolset
 from google.adk.tools.mcp_tool.mcp_toolset import StreamableHTTPConnectionParams
@@ -72,23 +73,17 @@ MCP_SSE_READ_TIMEOUT = 120.0
 # Instruction Template
 # =============================================================================
 
-SHOPPING_INSTRUCTION = """You are a shopping assistant. Buy products using these tools:
+SHOPPING_INSTRUCTION = """You are a shopping assistant.
 
 TASK: {goal}
 BUDGET: ${budget}
 
-TOOLS:
-- search(query): Returns products p1, p2, p3... with prices
-- click(element_id): Click "p1" to view, "add_to_cart" to add
-- checkout(): Complete purchase (MUST call this to finish)
+GUIDELINES:
+- If fixing cart errors: check cart first, remove wrong items, then add correct ones
+- Pick the best available product within budget - don't over-search
 
-REQUIRED STEPS (do exactly this):
-1. search("relevant terms")
-2. click("p1") - pick ANY product within budget
-3. click("add_to_cart")
-4. checkout()
-
-IMPORTANT: The catalog may not have exact matches. Buy the best available product within budget. Do NOT keep searching - pick from what's shown and complete the purchase.
+After checkout, respond with JSON:
+{{"reasoning": "why you chose this product", "summary": "brief completion message"}}
 
 Start now:"""
 
@@ -329,7 +324,7 @@ class ShoppingAgent:
             max_turns: Maximum number of turns for this execution.
 
         Returns:
-            Result dict with success, final_message, turns_used.
+            Result dict with success, final_message, turns_used, reasoning_trace.
         """
         print(f"[DEBUG] _execute_runner called with goal: {goal[:50]}")
         # Create initial message content
@@ -345,12 +340,15 @@ class ShoppingAgent:
 
         # Run the agent and process events
         # ADK handles the entire ReAct loop automatically - we just collect events
-        logger.info("Starting runner.run_async()", session_id=session_id)
-        print(f"[DEBUG] About to start runner.run_async()")
+        # Use RunConfig to limit LLM calls (this is the proper way to limit turns in ADK)
+        run_config = RunConfig(max_llm_calls=max_turns)
+        logger.info("Starting runner.run_async()", session_id=session_id, max_llm_calls=max_turns)
+        print(f"[DEBUG] About to start runner.run_async() with max_llm_calls={max_turns}")
         async for event in runner.run_async(
             user_id="assessment",
             session_id=session_id,
             new_message=initial_message,
+            run_config=run_config,
         ):
             turns_used += 1
 
@@ -369,12 +367,18 @@ class ShoppingAgent:
                 is_final=event.is_final_response(),
             )
 
+            # Capture any text content from this event
+            event_text = self._extract_message(event)
+            if event_text and not event_text.startswith("Error:"):
+                final_message = event_text  # Keep updating with latest
+
             # Check for max turns
             if turns_used >= max_turns:
                 logger.warning(
                     "Max turns reached",
                     turns_used=turns_used,
                     max_turns=max_turns,
+                    last_message=final_message[:100] if final_message else "",
                 )
                 break
 
@@ -399,10 +403,16 @@ class ShoppingAgent:
                 )
                 break
 
+        # Try to extract reasoning from JSON response
+        reasoning_summary = ""
+        if final_message:
+            reasoning_summary = self._extract_reasoning(final_message)
+
         result = {
             "success": success,
             "final_message": final_message,
             "turns_used": turns_used,
+            "reasoning_summary": reasoning_summary,
         }
 
         logger.info(
@@ -410,9 +420,35 @@ class ShoppingAgent:
             success=success,
             turns_used=turns_used,
             final_message_len=len(final_message) if final_message else 0,
+            has_reasoning=bool(reasoning_summary),
         )
 
         return result
+
+    def _extract_reasoning(self, message: str) -> str:
+        """Extract reasoning from agent's JSON response.
+
+        Args:
+            message: The agent's final message, expected to be JSON.
+
+        Returns:
+            The reasoning string, or empty if not found.
+        """
+        import json
+        import re
+
+        # Try to find JSON in the message
+        # Look for {...} pattern
+        json_match = re.search(r'\{[^{}]*\}', message)
+        if json_match:
+            try:
+                data = json.loads(json_match.group())
+                return data.get("reasoning", "")
+            except json.JSONDecodeError:
+                pass
+
+        # Fallback: return the whole message as reasoning if no JSON
+        return message if len(message) < 500 else ""
 
     def _extract_message(self, event: Event) -> str:
         """Extract text message from an event.

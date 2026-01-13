@@ -343,10 +343,12 @@ class Executor(AgentExecutor):
         # (MCP client cleanup sometimes raises but task may have completed successfully)
         if result is not None:
             # Send result data as JSON for green agent to parse
+            # Include reasoning_summary for evaluation (comparative reasoning, error recovery)
             result_json = json.dumps({
                 "success": result.get("success", False),
                 "turns_used": result.get("turns_used", 0),
                 "final_message": result.get("final_message", ""),
+                "reasoning_summary": result.get("reasoning_summary", ""),
                 "error": result.get("error"),
             })
 

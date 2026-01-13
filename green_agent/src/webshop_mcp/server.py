@@ -891,12 +891,20 @@ def click(element_id: str) -> dict[str, Any]:
     element = state.visible_elements[element_id]
 
     # Record click in history
-    state.history.append({
+    history_record = {
         "action": "click",
         "element_id": element_id,
         "element_type": element["type"],
         "turn": state.turn_count,
-    })
+    }
+
+    # For product clicks, also store the ASIN so evaluator can count unique products
+    if element["type"] == "product":
+        asin = element.get("asin") or element.get("data", {}).get("asin", "")
+        if asin:
+            history_record["product_asin"] = asin
+
+    state.history.append(history_record)
 
     # Dispatch based on element type
     if element["type"] == "product":
@@ -996,6 +1004,108 @@ def checkout() -> dict[str, Any]:
     _signal_completion(state.session_id, evaluation)
 
     return evaluation
+
+
+@mcp.tool()
+def view_cart() -> dict[str, Any]:
+    """View current cart contents with item indices for removal.
+
+    Use this to see what's in your cart before checkout or to identify
+    items to remove with remove_from_cart().
+
+    Returns:
+        - items: List of cart items with index, name, price, options
+        - cart_total: Total price of all items
+        - budget: Budget constraint
+        - budget_remaining: How much budget is left
+        - turn: Current turn number
+    """
+    state = get_current_state()
+
+    # Check turn limit
+    if state.increment_turn():
+        return _terminal_max_turns(state)
+
+    # Record in history
+    state.history.append({
+        "action": "view_cart",
+        "turn": state.turn_count,
+    })
+
+    # Build indexed item list
+    items = []
+    for i, item in enumerate(state.cart):
+        items.append({
+            "index": i,
+            "name": item.get("name", "Unknown"),
+            "price": item.get("price", 0.0),
+            "options": item.get("options", {}),
+        })
+
+    total = state.get_cart_total()
+
+    logger.info(
+        "MCP view_cart() response",
+        session_id=state.session_id,
+        cart_size=len(items),
+        cart_total=total,
+    )
+
+    return {
+        "items": items,
+        "cart_total": total,
+    }
+
+
+@mcp.tool()
+def remove_from_cart(item_index: int) -> dict[str, Any]:
+    """Remove an item from the cart by its index.
+
+    Use view_cart() first to see item indices.
+
+    Args:
+        item_index: Index of item to remove (0-based, from view_cart)
+
+    Returns:
+        - removed: Name of removed item
+        - cart_total: Updated total
+        - cart_size: Number of items remaining
+        - error: Only present if removal failed
+    """
+    state = get_current_state()
+
+    # Check turn limit
+    if state.increment_turn():
+        return _terminal_max_turns(state)
+
+    # Attempt removal
+    result = state.remove_from_cart(item_index)
+
+    if "error" in result:
+        logger.warning(
+            "MCP remove_from_cart() failed",
+            session_id=state.session_id,
+            item_index=item_index,
+            error=result["error"],
+        )
+        return {
+            "error": result["error"],
+            "cart_size": result["cart_size"],
+        }
+
+    logger.info(
+        "MCP remove_from_cart() response",
+        session_id=state.session_id,
+        removed=result["removed"],
+        cart_size=result["cart_size"],
+        cart_total=result["cart_total"],
+    )
+
+    return {
+        "removed": result["removed"],
+        "cart_total": result["cart_total"],
+        "cart_size": result["cart_size"],
+    }
 
 
 # =============================================================================

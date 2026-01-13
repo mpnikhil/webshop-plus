@@ -146,21 +146,22 @@ class TestInstructionFormatting:
             constraints=[],
         )
 
-        assert "search" in instruction.lower()
-        assert "click" in instruction.lower()
-        assert "checkout" in instruction.lower()
+        # Simplified prompt relies on MCP tool discovery, so doesn't hardcode tool names
+        # Just verify basic structure
+        assert "task" in instruction.lower()
+        assert "budget" in instruction.lower()
 
     def test_instruction_contains_rules(self, shopping_agent):
-        """Instruction contains important rules."""
+        """Instruction contains important guidelines."""
         instruction = shopping_agent._format_instruction(
             goal="Test",
             budget=100.0,
             constraints=[],
         )
 
-        assert "element_id" in instruction
-        # Note: "TERMINAL" removed from simplified template
-        assert "checkout()" in instruction  # Check for completion instruction
+        # Simplified prompt has checkout instruction and guidelines
+        assert "checkout" in instruction.lower()
+        assert "json" in instruction.lower()  # Expects JSON response
 
 
 # =============================================================================

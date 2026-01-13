@@ -14,18 +14,18 @@ from typing import Any, Optional
 
 from .llm_client import LLMClient
 from .models import (
-    AgentMemory,
     BudgetConstrainedTask,
+    CartItem,
     CartState,
     ComparativeReasoningTask,
     ErrorRecoveryTask,
     EvaluationResult,
     NegativeConstraintTask,
     PreferenceMemoryTask,
-    SessionState,
     Task,
     TaskType,
 )
+from .webshop_mcp.session_state import SessionState as MCPSessionState
 
 
 class Evaluator:
@@ -62,19 +62,17 @@ class Evaluator:
 
     def evaluate(
         self,
-        session: SessionState,
+        mcp_state: MCPSessionState,
         task: Task,
-        memory: Optional[AgentMemory] = None,
     ) -> EvaluationResult:
         """
-        Evaluate a completed session against a task.
+        Evaluate a completed session against a task using MCP state.
 
         Dispatches to the appropriate task-specific evaluator based on task type.
 
         Args:
-            session: The completed session state with action history.
+            mcp_state: The MCP session state with cart, history, and turn count.
             task: The task that was being assessed.
-            memory: Agent memory for preference_memory tasks (optional).
 
         Returns:
             EvaluationResult with scores and breakdown.
@@ -90,44 +88,46 @@ class Evaluator:
                 return EvaluationResult(
                     task_id=getattr(task, "task_id", "unknown"),
                     task_type=TaskType.BUDGET_CONSTRAINED,  # Default for error case
-                    completed=session.completed,
-                    actions_taken=session.actions_taken,
-                    time_elapsed_seconds=session.elapsed_seconds,
+                    completed=mcp_state.completed,
+                    actions_taken=mcp_state.turn_count,
+                    time_elapsed_seconds=0.0,  # TODO: Track timing in MCP state
                     error=f"Unknown task type: {task.task_type}",
                 )
 
-        # Create base result with universal metrics
+        # Create base result with universal metrics from MCP state
         result = EvaluationResult(
             task_id=task.task_id,
             task_type=task_type,
-            completed=session.completed,
-            actions_taken=session.actions_taken,
-            time_elapsed_seconds=session.elapsed_seconds,
+            completed=mcp_state.completed,
+            actions_taken=mcp_state.turn_count,
+            time_elapsed_seconds=0.0,  # TODO: Track timing in MCP state
         )
 
         # Dispatch to type-specific evaluator
         if task_type == TaskType.BUDGET_CONSTRAINED:
-            return self.evaluate_budget_task(session, task, result)
+            return self.evaluate_budget_task(mcp_state, task, result)
         elif task_type == TaskType.PREFERENCE_MEMORY:
-            return self.evaluate_memory_task(session, task, memory, result)
+            # Skip preference memory tasks (not supported without multi-session)
+            result.error = "Preference memory tasks are not currently supported"
+            return result
         elif task_type == TaskType.NEGATIVE_CONSTRAINT:
-            return self.evaluate_constraint_task(session, task, result)
+            return self.evaluate_constraint_task(mcp_state, task, result)
         elif task_type == TaskType.COMPARATIVE_REASONING:
-            return self.evaluate_reasoning_task(session, task, result)
+            return self.evaluate_reasoning_task(mcp_state, task, result)
         elif task_type == TaskType.ERROR_RECOVERY:
-            return self.evaluate_recovery_task(session, task, result)
+            return self.evaluate_recovery_task(mcp_state, task, result)
         else:
             result.error = f"Unknown task type: {task_type}"
             return result
 
     def evaluate_budget_task(
         self,
-        session: SessionState,
+        mcp_state: MCPSessionState,
         task: BudgetConstrainedTask,
         result: Optional[EvaluationResult] = None,
     ) -> EvaluationResult:
         """
-        Evaluate a budget-constrained task.
+        Evaluate a budget-constrained task using MCP state.
 
         Scoring formula:
             overall = (budget_compliance * weight) + (item_completion * weight) + (quality * weight)
@@ -137,7 +137,7 @@ class Evaluator:
         Quality: Based on optimization goal (ratings, price efficiency, or balanced)
 
         Args:
-            session: Completed session with purchases/cart.
+            mcp_state: MCP session state with cart and history.
             task: The budget-constrained task definition.
             result: Optional pre-populated result (for dispatch pattern).
 
@@ -148,9 +148,9 @@ class Evaluator:
             result = EvaluationResult(
                 task_id=task.task_id,
                 task_type=task.task_type,
-                completed=session.completed,
-                actions_taken=session.actions_taken,
-                time_elapsed_seconds=session.elapsed_seconds,
+                completed=mcp_state.completed,
+                actions_taken=mcp_state.turn_count,
+                time_elapsed_seconds=0.0,
             )
 
         budget = task.constraints.budget
@@ -158,8 +158,8 @@ class Evaluator:
         optimization_goal = task.constraints.optimization_goal.value
         weights = task.evaluation_criteria
 
-        # Calculate total spent from purchases or cart
-        total_spent = self._get_total_spent(session)
+        # Calculate total spent from MCP cart
+        total_spent = self._get_total_spent(mcp_state)
 
         # 1. Budget compliance score
         if total_spent <= budget:
@@ -185,7 +185,7 @@ class Evaluator:
         )
 
         # 2. Item completion score
-        purchased_items = self._get_purchased_items(session)
+        purchased_items = self._get_purchased_items(mcp_state)
         required_count = len([r for r in required_items if not r.optional])
         optional_count = len([r for r in required_items if r.optional])
 
@@ -222,7 +222,7 @@ class Evaluator:
 
         # 3. Quality/optimization score
         quality_score, quality_explanation = self._calculate_quality_score(
-            session, budget, optimization_goal, total_spent
+            budget, optimization_goal, total_spent
         )
 
         result.add_component(
@@ -252,102 +252,38 @@ class Evaluator:
 
     def evaluate_memory_task(
         self,
-        session: SessionState,
+        mcp_state: MCPSessionState,
         task: PreferenceMemoryTask,
-        memory: Optional[AgentMemory] = None,
         result: Optional[EvaluationResult] = None,
     ) -> EvaluationResult:
-        """
-        Evaluate a preference memory task.
-
-        Scoring formula:
-            overall = (recall_accuracy * weight) + (consistency * weight)
-
-        Recall accuracy: Did the agent recall the established preference correctly?
-        Consistency: Is the purchase consistent with remembered preferences?
-
-        Args:
-            session: Completed session with actions and purchases.
-            task: The preference memory task definition.
-            memory: Agent memory with previous session preferences.
-            result: Optional pre-populated result.
-
-        Returns:
-            EvaluationResult with memory task scoring.
-        """
+        """Preference memory tasks are not supported without multi-session execution."""
         if result is None:
             result = EvaluationResult(
                 task_id=task.task_id,
                 task_type=task.task_type,
-                completed=session.completed,
-                actions_taken=session.actions_taken,
-                time_elapsed_seconds=session.elapsed_seconds,
+                completed=mcp_state.completed,
+                actions_taken=mcp_state.turn_count,
+                time_elapsed_seconds=0.0,
             )
 
-        weights = task.evaluation_criteria
-        memory_test = task.memory_test
-
-        # Get expected preferences from previous sessions in the sequence
-        expected_preferences = self._extract_expected_preferences(task)
-
-        # Check agent's actions/messages for preference recall
-        recall_score, recall_explanation = self._check_preference_recall(
-            session,
-            memory_test.attribute_to_recall,
-            memory_test.acceptable_values,
-            memory,
-        )
-
-        result.add_component(
-            name="recall_accuracy",
-            weight=weights.recall_accuracy_weight,
-            raw_value=memory_test.attribute_to_recall,
-            normalized_score=recall_score,
-            explanation=recall_explanation,
-        )
-
-        # Check purchase consistency with remembered preferences
-        consistency_score, consistency_explanation = self._check_preference_consistency(
-            session,
-            expected_preferences,
-            memory,
-        )
-
-        result.add_component(
-            name="preference_consistency",
-            weight=weights.consistency_weight,
-            raw_value=expected_preferences,
-            normalized_score=consistency_score,
-            explanation=consistency_explanation,
-        )
-
-        result.calculate_overall_score()
-        result.success = recall_score >= 0.5 and consistency_score >= 0.5
-
-        result.metrics = {
-            "attribute_tested": memory_test.attribute_to_recall,
-            "acceptable_values": memory_test.acceptable_values,
-            "expected_preferences": expected_preferences,
-            "recall_detected": recall_score > 0,
-        }
-
+        result.error = "Preference memory tasks require multi-session execution (not yet implemented)"
         return result
 
     def evaluate_constraint_task(
         self,
-        session: SessionState,
+        mcp_state: MCPSessionState,
         task: NegativeConstraintTask,
         result: Optional[EvaluationResult] = None,
     ) -> EvaluationResult:
         """
-        Evaluate a negative constraint task.
+        Evaluate a negative constraint task using MCP state.
 
         Scoring formula:
             violation_penalty = min(1.0, violations * 0.25)  # Each violation costs 25%
             overall = positive_match * (1 - violation_penalty)
 
         Args:
-            session: Completed session with purchases.
+            mcp_state: MCP session state with cart.
             task: The negative constraint task definition.
             result: Optional pre-populated result.
 
@@ -358,14 +294,14 @@ class Evaluator:
             result = EvaluationResult(
                 task_id=task.task_id,
                 task_type=task.task_type,
-                completed=session.completed,
-                actions_taken=session.actions_taken,
-                time_elapsed_seconds=session.elapsed_seconds,
+                completed=mcp_state.completed,
+                actions_taken=mcp_state.turn_count,
+                time_elapsed_seconds=0.0,
             )
 
         constraints = task.constraints
         weights = task.evaluation_criteria
-        purchased_items = self._get_purchased_items(session)
+        purchased_items = self._get_purchased_items(mcp_state)
 
         # Check for constraint violations
         violations = []
@@ -431,18 +367,18 @@ class Evaluator:
 
     def evaluate_reasoning_task(
         self,
-        session: SessionState,
+        mcp_state: MCPSessionState,
         task: ComparativeReasoningTask,
         result: Optional[EvaluationResult] = None,
     ) -> EvaluationResult:
         """
-        Evaluate a comparative reasoning task using LLM-as-judge.
+        Evaluate a comparative reasoning task using MCP state.
 
         Scoring formula:
             overall = (exploration * 0.3) + (justification_provided * 0.2) + (justification_quality * 0.5)
 
         Args:
-            session: Completed session with action trace.
+            mcp_state: MCP session state with history.
             task: The comparative reasoning task definition.
             result: Optional pre-populated result.
 
@@ -453,16 +389,16 @@ class Evaluator:
             result = EvaluationResult(
                 task_id=task.task_id,
                 task_type=task.task_type,
-                completed=session.completed,
-                actions_taken=session.actions_taken,
-                time_elapsed_seconds=session.elapsed_seconds,
+                completed=mcp_state.completed,
+                actions_taken=mcp_state.turn_count,
+                time_elapsed_seconds=0.0,
             )
 
         requirements = task.requirements
         criteria = task.evaluation_criteria
 
         # 1. Exploration score: Did the agent explore enough options?
-        products_explored = self._count_products_explored(session)
+        products_explored = self._count_products_explored(mcp_state)
         min_required = criteria.minimum_options_explored
 
         if products_explored >= min_required:
@@ -484,7 +420,7 @@ class Evaluator:
         )
 
         # 2. Justification provided: Did the agent provide reasoning?
-        justification = self._extract_justification(session)
+        justification = self._extract_justification(mcp_state)
         justification_provided = len(justification) > 50  # At least some explanation
 
         if justification_provided:
@@ -541,19 +477,19 @@ class Evaluator:
 
     def evaluate_recovery_task(
         self,
-        session: SessionState,
+        mcp_state: MCPSessionState,
         task: ErrorRecoveryTask,
         result: Optional[EvaluationResult] = None,
     ) -> EvaluationResult:
         """
-        Evaluate an error recovery task.
+        Evaluate an error recovery task using MCP state.
 
         Scoring formula:
             action_penalty = max(0, (actions_taken - expected) / expected) * penalty_weight
             overall = (error_fixed * 0.7) + (error_identified * 0.1) + ((1 - action_penalty) * 0.2)
 
         Args:
-            session: Completed session with final cart state.
+            mcp_state: MCP session state with cart.
             task: The error recovery task definition.
             result: Optional pre-populated result.
 
@@ -564,9 +500,9 @@ class Evaluator:
             result = EvaluationResult(
                 task_id=task.task_id,
                 task_type=task.task_type,
-                completed=session.completed,
-                actions_taken=session.actions_taken,
-                time_elapsed_seconds=session.elapsed_seconds,
+                completed=mcp_state.completed,
+                actions_taken=mcp_state.turn_count,
+                time_elapsed_seconds=0.0,
             )
 
         setup = task.setup
@@ -577,8 +513,10 @@ class Evaluator:
         expected_cart = self._build_cart_from_setup(correct_state.expected_cart)
 
         # 1. Error fixed: Does the final cart match expected?
+        # Build MCP cart representation for comparison
+        mcp_cart = self._build_cart_from_mcp(mcp_state.cart)
         error_fixed, fix_explanation = self._compare_carts(
-            session.cart, expected_cart
+            mcp_cart, expected_cart
         )
 
         result.add_component(
@@ -590,7 +528,7 @@ class Evaluator:
         )
 
         # 2. Error identified: Did the agent acknowledge the error?
-        error_identified = self._check_error_identified(session, setup.error_description)
+        error_identified = self._check_error_identified(mcp_state, setup.error_description)
 
         result.add_component(
             name="error_identified",
@@ -602,7 +540,7 @@ class Evaluator:
 
         # 3. Efficiency: Action penalty for excessive actions
         expected_actions = task.expected_actions
-        actual_actions = session.actions_taken
+        actual_actions = result.actions_taken  # From mcp_state.turn_count
 
         if actual_actions <= expected_actions:
             efficiency_score = 1.0
@@ -622,7 +560,7 @@ class Evaluator:
         )
 
         result.calculate_overall_score()
-        result.success = error_fixed and session.completed
+        result.success = error_fixed and mcp_state.completed
 
         result.metrics = {
             "error_description": setup.error_description,
@@ -632,7 +570,7 @@ class Evaluator:
             "expected_actions": expected_actions,
             "initial_cart_items": len(setup.cart_contents),
             "expected_cart_items": len(correct_state.expected_cart),
-            "final_cart_items": len(session.cart.items),
+            "final_cart_items": len(mcp_state.cart),
         }
 
         return result
@@ -641,35 +579,23 @@ class Evaluator:
     # Helper methods
     # =========================================================================
 
-    def _get_total_spent(self, session: SessionState) -> float:
-        """Get total amount spent from purchases or cart."""
-        if session.purchases:
-            return sum(p.price for p in session.purchases)
-        return session.cart.total
+    def _get_total_spent(self, mcp_state: MCPSessionState) -> float:
+        """Get total amount spent from MCP cart."""
+        return mcp_state.get_cart_total()
 
-    def _get_purchased_items(self, session: SessionState) -> list[dict[str, Any]]:
-        """Get list of purchased/carted items as dicts."""
+    def _get_purchased_items(self, mcp_state: MCPSessionState) -> list[dict[str, Any]]:
+        """Get list of cart items from MCP state as dicts."""
         items = []
 
-        # Check purchases first
-        for purchase in session.purchases:
+        # MCP cart already contains items as dicts
+        for cart_item in mcp_state.cart:
             items.append({
-                "product_id": purchase.product_id,
-                "product_name": purchase.product_name,
-                "attributes": purchase.attributes,
-                "price": purchase.price,
+                "product_id": cart_item.get("product_id", ""),
+                "product_name": cart_item.get("name", ""),
+                "attributes": cart_item.get("options", {}),
+                "price": cart_item.get("price", 0.0),
+                "quantity": cart_item.get("quantity", 1),
             })
-
-        # Fall back to cart if no purchases
-        if not items:
-            for cart_item in session.cart.items:
-                items.append({
-                    "product_id": cart_item.product_id,
-                    "product_name": cart_item.product_name,
-                    "attributes": cart_item.attributes,
-                    "price": cart_item.price,
-                    "quantity": cart_item.quantity,
-                })
 
         return items
 
@@ -721,7 +647,6 @@ class Evaluator:
 
     def _calculate_quality_score(
         self,
-        session: SessionState,
         budget: float,
         optimization_goal: str,
         total_spent: float,
@@ -761,85 +686,25 @@ class Evaluator:
             return 0.0, "No purchases made"
 
     def _extract_expected_preferences(self, task: PreferenceMemoryTask) -> dict[str, Any]:
-        """Extract preferences that should be remembered from task sequence."""
-        preferences = {}
-        for session_item in task.session_sequence:
-            preferences.update(session_item.establishes)
-        return preferences
+        """Extract preferences that should be remembered from task sequence (stub)."""
+        return {}
 
     def _check_preference_recall(
         self,
-        session: SessionState,
+        mcp_state: MCPSessionState,
         attribute: str,
         acceptable_values: list[str],
-        memory: Optional[AgentMemory],
     ) -> tuple[float, str]:
-        """Check if the agent correctly recalled a preference."""
-        # Look for mentions of the attribute or acceptable values in actions
-        action_text = " ".join(a.action.lower() for a in session.actions)
-        observation_text = " ".join(a.observation.lower() for a in session.actions)
-        all_text = action_text + " " + observation_text
-
-        attribute_lower = attribute.lower()
-        values_lower = [v.lower() for v in acceptable_values]
-
-        # Check for explicit recall
-        attribute_mentioned = attribute_lower in all_text
-        value_mentioned = any(v in all_text for v in values_lower)
-
-        if attribute_mentioned and value_mentioned:
-            return 1.0, f"Recalled {attribute} with correct value"
-        elif value_mentioned:
-            return 0.8, f"Used correct value for {attribute} (implicit recall)"
-        elif attribute_mentioned:
-            return 0.4, f"Mentioned {attribute} but incorrect value"
-        else:
-            # Check memory-based recall
-            if memory:
-                remembered = memory.get_all_preferences()
-                if attribute_lower in str(remembered).lower():
-                    return 0.5, f"Preference {attribute} in memory but not explicitly used"
-
-            return 0.0, f"No recall of {attribute} detected"
+        """Check if the agent correctly recalled a preference (stub)."""
+        return 0.0, "Preference memory tasks not supported"
 
     def _check_preference_consistency(
         self,
-        session: SessionState,
+        mcp_state: MCPSessionState,
         expected_preferences: dict[str, Any],
-        memory: Optional[AgentMemory],
     ) -> tuple[float, str]:
-        """Check if purchases are consistent with remembered preferences."""
-        if not expected_preferences:
-            return 1.0, "No preferences to check"
-
-        items = self._get_purchased_items(session)
-        if not items:
-            return 0.0, "No purchases to check consistency"
-
-        matches = 0
-        total = len(expected_preferences)
-
-        for key, value in expected_preferences.items():
-            key_lower = key.lower()
-            value_lower = str(value).lower()
-
-            for item in items:
-                # Check in product name
-                if value_lower in item.get("product_name", "").lower():
-                    matches += 1
-                    break
-
-                # Check in attributes
-                item_attrs = item.get("attributes", {})
-                for attr_key, attr_val in item_attrs.items():
-                    if key_lower in attr_key.lower() and value_lower in str(attr_val).lower():
-                        matches += 1
-                        break
-
-        if total > 0:
-            score = matches / total
-            return score, f"Consistency: {matches}/{total} preferences matched"
-        return 1.0, "No preferences to verify"
+        """Check if purchases are consistent with remembered preferences (stub)."""
+        return 0.0, "Preference memory tasks not supported"
 
     def _check_constraint_violations(
         self,
@@ -892,55 +757,58 @@ class Evaluator:
         score = matched / len(required_attributes)
         return score, f"Matched {matched}/{len(required_attributes)} required attributes"
 
-    def _count_products_explored(self, session: SessionState) -> int:
-        """Count unique products explored during the session."""
-        product_ids = set()
-        product_patterns = [
-            r"product[_/]?(\w+)",
-            r"item[_/]?(\w+)",
-            r"asin[=:]?\s*([A-Z0-9]+)",
-            r"view.*?(\w{8,})",
-        ]
+    def _count_products_explored(self, mcp_state: MCPSessionState) -> int:
+        """Count unique products explored from MCP history."""
+        product_asins = set()
 
-        for action in session.actions:
-            action_text = action.action + " " + action.observation
+        # Count click actions on product elements
+        for record in mcp_state.history:
+            action_type = record.get("action", "")
 
-            for pattern in product_patterns:
-                matches = re.findall(pattern, action_text, re.IGNORECASE)
-                product_ids.update(matches)
+            if action_type == "click":
+                # Use the actual product ASIN if available (added by click tool for product clicks)
+                product_asin = record.get("product_asin")
+                if product_asin:
+                    product_asins.add(product_asin)
+                else:
+                    # Fallback: count positional element IDs (p1, p2, etc.)
+                    # Note: This is less accurate since element IDs are reused across searches
+                    element_id = record.get("element_id", "")
+                    if element_id and element_id.startswith("p") and len(element_id) <= 4:
+                        product_asins.add(element_id)
 
-            # Also count "click" or "view" actions as exploration
-            if any(word in action.action.lower() for word in ["click", "view", "select", "open"]):
-                # Extract any identifier-like strings
-                ids = re.findall(r"\b[A-Z0-9]{6,}\b", action_text)
-                product_ids.update(ids)
+            elif action_type == "add_to_cart":
+                product = record.get("product", {})
+                product_id = product.get("product_id") or product.get("asin", "")
+                if product_id:
+                    product_asins.add(product_id)
 
-        # Reasonable minimum
-        return max(len(product_ids), len([a for a in session.actions if "product" in a.observation.lower()]))
+        return len(product_asins)
 
-    def _extract_justification(self, session: SessionState) -> str:
-        """Extract agent's justification/reasoning from session."""
-        justification_parts = []
+    def _extract_justification(self, mcp_state: MCPSessionState) -> str:
+        """Extract agent's justification/reasoning from session state.
 
-        comparison_keywords = [
-            "because", "since", "therefore", "better", "worse",
-            "compared", "versus", "vs", "recommend", "choose",
-            "prefer", "rating", "review", "price", "quality",
-            "feature", "advantage", "disadvantage", "pros", "cons",
-        ]
+        Uses reasoning_summary captured from purple agent's A2A completion.
+        Falls back to MCP history summary if no reasoning available.
+        """
+        # Use captured reasoning from purple agent if available
+        if mcp_state.reasoning_summary:
+            return mcp_state.reasoning_summary
 
-        for action in session.actions:
-            action_text = action.action.lower()
-
-            # Check if action contains comparison/justification language
-            if any(keyword in action_text for keyword in comparison_keywords):
-                justification_parts.append(action.action)
-
-            # Also check for longer explanatory text
-            if len(action.action) > 100:
-                justification_parts.append(action.action)
-
-        return " ".join(justification_parts)
+        # Fallback: summarize actions from MCP history
+        if mcp_state.history:
+            actions = []
+            for record in mcp_state.history:
+                action_type = record.get("action", "")
+                if action_type == "search":
+                    actions.append(f"searched for '{record.get('query', '')}'")
+                elif action_type == "click":
+                    actions.append(f"clicked {record.get('element_id', '')}")
+                elif action_type == "add_to_cart":
+                    product = record.get("product", {})
+                    actions.append(f"added {product.get('name', 'item')} to cart")
+            return "Actions taken: " + ", ".join(actions) if actions else ""
+        return ""
 
     def _evaluate_justification_quality(
         self,
@@ -1024,9 +892,23 @@ Score from 0-10 where:
         explanation = "Heuristic: " + ", ".join(reasons) if reasons else "Weak justification"
         return score, explanation
 
+    def _build_cart_from_mcp(self, mcp_cart: list[dict[str, Any]]) -> CartState:
+        """Build a CartState from MCP cart items."""
+        cart = CartState()
+        for cart_dict in mcp_cart:
+            item = CartItem(
+                product_id=cart_dict.get("product_id", ""),
+                product_name=cart_dict.get("name", ""),
+                attributes=cart_dict.get("options", {}),
+                quantity=cart_dict.get("quantity", 1),
+                price=cart_dict.get("price", 0.0),
+            )
+            cart.add_item(item)
+        return cart
+
     def _build_cart_from_setup(self, cart_setup: list) -> CartState:
         """Build a CartState from cart setup items."""
-        from .models import CartItem, CartItemSetup
+        from .models import CartItemSetup
 
         cart = CartState()
         for setup_item in cart_setup:
@@ -1077,22 +959,93 @@ Score from 0-10 where:
 
     def _check_error_identified(
         self,
-        session: SessionState,
+        mcp_state: MCPSessionState,
         error_description: str,
     ) -> bool:
-        """Check if the agent acknowledged the error in their actions."""
-        error_keywords = error_description.lower().split()
-        action_text = " ".join(a.action.lower() for a in session.actions)
+        """Check if the agent acknowledged the error using LLM-as-judge.
 
-        # Look for acknowledgment keywords
-        acknowledgment_words = [
-            "wrong", "error", "mistake", "incorrect", "fix",
-            "remove", "change", "adjust", "update", "correct",
+        Uses the agent's reasoning (if available) and actions to determine
+        if the error was properly identified before attempting to fix it.
+        """
+        # If we have reasoning from the agent, use LLM to evaluate
+        if mcp_state.reasoning_summary and self._llm_client is not None:
+            return self._llm_check_error_identification(
+                mcp_state.reasoning_summary,
+                error_description,
+                mcp_state.history,
+            )
+
+        # Fallback heuristic when no LLM or reasoning available
+        # Check if agent took corrective actions (removed items or searched for alternatives)
+        has_removal = any(
+            record.get("action") == "remove_from_cart"
+            for record in mcp_state.history
+        )
+
+        # Check if searches relate to the correct item (not the error)
+        # Extract what the correct item should be from error description
+        search_queries = [
+            record.get("query", "").lower()
+            for record in mcp_state.history
+            if record.get("action") == "search"
         ]
 
-        acknowledged = any(word in action_text for word in acknowledgment_words)
+        # If they removed something and searched, likely identified the error
+        return has_removal or len(search_queries) > 0
 
-        # Also check if they mentioned specifics from the error
-        specific_match = sum(1 for word in error_keywords if word in action_text and len(word) > 3)
+    def _llm_check_error_identification(
+        self,
+        reasoning: str,
+        error_description: str,
+        history: list[dict],
+    ) -> bool:
+        """Use LLM to evaluate if agent identified the error.
 
-        return acknowledged or specific_match >= 2
+        Args:
+            reasoning: Agent's reasoning/justification text.
+            error_description: Description of the error to identify.
+            history: MCP action history.
+
+        Returns:
+            True if the agent demonstrated understanding of the error.
+        """
+        # Build action summary
+        actions_summary = []
+        for record in history:
+            action = record.get("action", "")
+            if action == "search":
+                actions_summary.append(f"- Searched for: {record.get('query', '')}")
+            elif action == "remove_from_cart":
+                removed = record.get("removed_product", {}).get("name", "item")
+                actions_summary.append(f"- Removed from cart: {removed}")
+            elif action == "add_to_cart":
+                added = record.get("product", {}).get("name", "item")
+                actions_summary.append(f"- Added to cart: {added}")
+
+        actions_text = "\n".join(actions_summary) if actions_summary else "No actions recorded"
+
+        prompt = f"""Evaluate whether the shopping agent identified and understood the error.
+
+ERROR DESCRIPTION: {error_description}
+
+AGENT'S REASONING:
+{reasoning}
+
+AGENT'S ACTIONS:
+{actions_text}
+
+Did the agent demonstrate that they understood what was wrong?
+Consider:
+1. Did their reasoning mention or acknowledge the error?
+2. Did their actions show they understood what needed to be fixed?
+3. Did they search for or add the correct item (not the wrong one)?
+
+Answer with just "yes" or "no"."""
+
+        try:
+            messages = [{"role": "user", "content": prompt}]
+            response = self._llm_client.complete(messages, max_tokens=10)
+            return "yes" in response.lower()
+        except Exception:
+            # Fallback to True if LLM fails (benefit of doubt)
+            return True

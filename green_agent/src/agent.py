@@ -27,17 +27,17 @@ from .models import (
     AssessmentConfig,
     AssessmentResults,
     BudgetConstrainedTask,
+    ErrorRecoveryTask,
     EvaluationResult,
     NegativeConstraintTask,
     PreferenceMemoryTask,
-    SessionState,
     Task,
     TaskType,
     TaskUpdate,
 )
 from .purple_client import PurpleAgentClient, TaskResult, PurpleAgentClientError
-from .state_manager import StateManager
 from .task_generator import TaskGenerator
+from .webshop_mcp.session_state import SessionState as MCPSessionState
 from .webshop_wrapper import WebShopWrapper
 
 if TYPE_CHECKING:
@@ -100,7 +100,6 @@ class WebShopPlusAgent:
         self,
         config: Optional[AgentConfig] = None,
         task_generator: Optional[TaskGenerator] = None,
-        state_manager: Optional[StateManager] = None,
         webshop: Optional[WebShopWrapper] = None,
         evaluator: Optional[Evaluator] = None,
         llm_client: Optional[LLMClient] = None,
@@ -112,7 +111,6 @@ class WebShopPlusAgent:
         Args:
             config: Agent configuration.
             task_generator: Task generator instance (creates default if None).
-            state_manager: State manager instance (creates default if None).
             webshop: WebShop wrapper instance (creates default if None).
             evaluator: Evaluator instance (creates default if None).
             llm_client: LLM client for evaluation (creates default if None).
@@ -122,7 +120,6 @@ class WebShopPlusAgent:
 
         # Components - lazy initialization
         self._task_generator = task_generator
-        self._state_manager = state_manager
         self._webshop = webshop
         self._evaluator = evaluator
         self._llm_client = llm_client
@@ -137,12 +134,6 @@ class WebShopPlusAgent:
         if self._task_generator is None:
             self._task_generator = TaskGenerator()
         return self._task_generator
-
-    @property
-    def state_manager(self) -> StateManager:
-        if self._state_manager is None:
-            self._state_manager = StateManager()
-        return self._state_manager
 
     @property
     def webshop(self) -> WebShopWrapper:
@@ -575,41 +566,55 @@ class WebShopPlusAgent:
             session_id="",
         )
 
-        # Create session for tracking
-        session = self.state_manager.create_session(task.task_id, agent_id)
-        result.session_id = session.session_id
+        # Extract task data for kickoff
+        goal, budget, constraints = self._extract_task_kickoff_data(task)
 
-        # Get agent memory for preference tasks
-        memory: Optional[AgentMemory] = None
-        if isinstance(task, PreferenceMemoryTask):
-            memory = self.state_manager.get_agent_memory(agent_id)
+        # Create MCP session
+        mcp_session_id: Optional[str] = None
+        mcp_uri: Optional[str] = None
+        mcp_state: Optional[MCPSessionState] = None
+
+        if self._session_manager is not None:
+            mcp_session_id = str(uuid.uuid4())
+            result.session_id = mcp_session_id  # Use MCP session ID as result session ID
+
+            # Extract initial cart for error_recovery tasks
+            initial_cart = None
+            if isinstance(task, ErrorRecoveryTask) and task.setup.cart_contents:
+                initial_cart = [
+                    {
+                        "product_id": item.product_id,
+                        "name": item.product_name,
+                        "price": item.price,
+                        "quantity": item.quantity,
+                        "options": item.attributes,
+                    }
+                    for item in task.setup.cart_contents
+                ]
+                logger.info(
+                    "Pre-populating cart for error_recovery task",
+                    task_id=task.task_id,
+                    cart_items=len(initial_cart),
+                )
+
+            await self._session_manager.create_session(
+                session_id=mcp_session_id,
+                goal=goal,
+                budget=budget,
+                constraints=constraints,
+                max_turns=self.config.max_actions_per_task,
+                initial_cart=initial_cart,
+            )
+            mcp_uri = self._get_mcp_uri(mcp_session_id)
+
+            logger.info(
+                "Created MCP session for task",
+                task_id=task.task_id,
+                mcp_session_id=mcp_session_id,
+                mcp_uri=mcp_uri,
+            )
 
         try:
-            # Extract task data for kickoff
-            goal, budget, constraints = self._extract_task_kickoff_data(task)
-
-            # Create MCP session if session manager is available
-            mcp_session_id: Optional[str] = None
-            mcp_uri: Optional[str] = None
-
-            if self._session_manager is not None:
-                mcp_session_id = str(uuid.uuid4())
-                await self._session_manager.create_session(
-                    session_id=mcp_session_id,
-                    goal=goal,
-                    budget=budget,
-                    constraints=constraints,
-                    max_turns=self.config.max_actions_per_task,
-                )
-                mcp_uri = self._get_mcp_uri(mcp_session_id)
-
-                logger.info(
-                    "Created MCP session for task",
-                    task_id=task.task_id,
-                    mcp_session_id=mcp_session_id,
-                    mcp_uri=mcp_uri,
-                )
-
             # Send task to purple agent via PurpleAgentClient
             async with PurpleAgentClient(shopper_endpoint) as client:
                 task_result = await client.send_task(
@@ -651,43 +656,31 @@ class WebShopPlusAgent:
                         error=task_result.error,
                     )
 
-            # Get final result from MCP session if available
+            # Get final MCP session state for evaluation
+            mcp_state: Optional[MCPSessionState] = None
             if mcp_session_id and self._session_manager:
-                session_completed = self._session_manager.is_session_completed(mcp_session_id)
-                logger.info(
-                    "Checking MCP session completion",
-                    mcp_session_id=mcp_session_id,
-                    session_completed=session_completed,
-                    task_id=task.task_id,
-                )
-                if session_completed:
-                    mcp_result = self._session_manager.get_final_result(mcp_session_id)
+                mcp_state = await self._session_manager.get_session(mcp_session_id)
+
+                if mcp_state:
                     logger.info(
-                        "Retrieved MCP final result",
+                        "Retrieved MCP state for evaluation",
                         mcp_session_id=mcp_session_id,
-                        has_result=mcp_result is not None,
-                        result_keys=list(mcp_result.keys()) if mcp_result else [],
+                        history_len=len(mcp_state.history),
+                        cart_len=len(mcp_state.cart),
+                        turns_used=mcp_state.turn_count,
                         task_id=task.task_id,
                     )
-                    if mcp_result:
-                        # Merge MCP result into task execution result
-                        if "turns_used" in mcp_result:
-                            logger.info(
-                                "Setting actions_taken from MCP result",
-                                turns_used=mcp_result["turns_used"],
-                                task_id=task.task_id,
-                            )
-                            result.actions_taken = mcp_result["turns_used"]
-                        if "success" in mcp_result:
-                            result.completed = mcp_result["success"]
-                        if "reward" in mcp_result:
-                            result.total_reward = mcp_result["reward"]
-                else:
-                    logger.warning(
-                        "MCP session not marked as completed",
-                        mcp_session_id=mcp_session_id,
-                        task_id=task.task_id,
-                    )
+                    # Update result with MCP metrics
+                    result.actions_taken = mcp_state.turn_count
+
+                    # Attach reasoning from purple agent for evaluation
+                    if task_result.result_data and "reasoning_summary" in task_result.result_data:
+                        mcp_state.reasoning_summary = task_result.result_data["reasoning_summary"]
+                        logger.info(
+                            "Attached reasoning_summary to MCP state",
+                            reasoning_len=len(mcp_state.reasoning_summary),
+                            task_id=task.task_id,
+                        )
 
                 # Clean up MCP session
                 await self._session_manager.cleanup_session(mcp_session_id)
@@ -702,7 +695,7 @@ class WebShopPlusAgent:
             result.error = f"Task execution error: {str(e)}"
             logger.error("MCP task execution error", task_id=task.task_id, error=str(e))
 
-        return self._finalize_task(result, session, task, memory)
+        return self._finalize_task(result, task, mcp_state)
 
     async def _execute_task(
         self,
@@ -726,24 +719,20 @@ class WebShopPlusAgent:
     def _finalize_task(
         self,
         result: TaskExecutionResult,
-        session: SessionState,
         task: Task,
-        memory: Optional[AgentMemory],
+        mcp_state: Optional[MCPSessionState],
     ) -> TaskExecutionResult:
-        """Finalize task execution and evaluate."""
-        # Update session with actions_taken from result
-        # (result.actions_taken was set from MCP final result)
-        session.set_action_count(result.actions_taken)
-
-        # Complete session
-        session_summary = self.state_manager.complete_session(
-            session.session_id,
-            task_type=task.task_type.value,
-        )
-
-        # Evaluate
-        evaluation = self.evaluator.evaluate(session, task, memory)
-        result.evaluation = evaluation
+        """Finalize task execution and evaluate using MCP state."""
+        # Evaluate using MCP state directly
+        if mcp_state:
+            evaluation = self.evaluator.evaluate(mcp_state, task)
+            result.evaluation = evaluation
+        else:
+            logger.warning(
+                "No MCP state available for evaluation",
+                task_id=task.task_id,
+            )
+            result.error = result.error or "No MCP state available for evaluation"
 
         return result
 

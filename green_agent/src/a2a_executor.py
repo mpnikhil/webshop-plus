@@ -83,6 +83,7 @@ def _parse_config(metadata: dict[str, Any]) -> AssessmentConfig:
         "categories": "task_types",
         "timeout_per_task": "timeout_per_task",
         "max_steps_per_task": "max_steps_per_task",
+        "include_memory_tasks": "include_memory_tasks",
     }
 
     mapped_config = {}
