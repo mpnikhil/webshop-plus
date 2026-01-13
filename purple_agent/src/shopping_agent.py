@@ -303,16 +303,16 @@ class ShoppingAgent:
         Args:
             goal: The shopping task goal.
             budget: Maximum spending allowed.
-            constraints: List of constraints.
+            constraints: List of constraints (not used in simplified template).
 
         Returns:
             Formatted instruction string.
         """
-        constraint_text = ", ".join(constraints) if constraints else "none"
+        # Note: Constraints are accepted for API compatibility but not used
+        # in the simplified instruction template
         return SHOPPING_INSTRUCTION.format(
             goal=goal,
             budget=budget,
-            constraints=constraint_text,
         )
 
     async def _execute_runner(
@@ -384,6 +384,7 @@ class ShoppingAgent:
                     "Error event received",
                     error=event.error_message,
                 )
+                final_message = self._extract_message(event)
                 break
 
             # Use ADK's built-in method to identify final response

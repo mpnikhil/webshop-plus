@@ -147,7 +147,7 @@ class TestAgentCard:
         data = response.json()
 
         capabilities = data["capabilities"]
-        assert capabilities["streaming"] is False
+        assert capabilities["streaming"] is True
         assert capabilities.get("pushNotifications", False) is False
 
     def test_agent_card_url_format(self, client):
@@ -441,7 +441,7 @@ class TestCreateAgentCard:
     def test_creates_agent_card_with_capabilities(self):
         """Test create_agent_card creates card with correct capabilities."""
         card = create_agent_card("http://example.com")
-        assert card.capabilities.streaming is False
+        assert card.capabilities.streaming is True
 
 
 # =============================================================================

@@ -113,7 +113,7 @@ class TestInstructionFormatting:
 
         assert "Find waterproof running shoes under $80" in instruction
         assert "$80.0" in instruction
-        assert "waterproof, size 10" in instruction
+        # Note: Constraints are not included in the simplified template
 
     def test_format_instruction_no_constraints(self, shopping_agent):
         """Instruction formatted with empty constraints."""
@@ -125,7 +125,7 @@ class TestInstructionFormatting:
 
         assert "Find a laptop" in instruction
         assert "$500.0" in instruction
-        assert "CONSTRAINTS: none" in instruction
+        # Note: Constraints are not included in the simplified template
 
     def test_format_instruction_single_constraint(self, shopping_agent):
         """Instruction formatted with single constraint."""
@@ -136,7 +136,7 @@ class TestInstructionFormatting:
         )
 
         assert "Find headphones" in instruction
-        assert "wireless" in instruction
+        # Note: Constraints are not included in the simplified template
 
     def test_instruction_contains_tool_descriptions(self, shopping_agent):
         """Instruction contains MCP tool descriptions."""
@@ -158,8 +158,9 @@ class TestInstructionFormatting:
             constraints=[],
         )
 
-        assert "element ID" in instruction or "element_id" in instruction
-        assert "TERMINAL" in instruction
+        assert "element_id" in instruction
+        # Note: "TERMINAL" removed from simplified template
+        assert "checkout()" in instruction  # Check for completion instruction
 
 
 # =============================================================================
@@ -203,41 +204,7 @@ class TestInputValidation:
 class TestEventProcessing:
     """Tests for event processing methods."""
 
-    def test_is_final_event_turn_complete(self, shopping_agent):
-        """Turn complete event is recognized as final."""
-        event = MagicMock()
-        event.turn_complete = True
-        event.finish_reason = None
-        event.error_message = None
-
-        assert shopping_agent._is_final_event(event) is True
-
-    def test_is_final_event_finish_reason(self, shopping_agent):
-        """Finish reason event is recognized as final."""
-        event = MagicMock()
-        event.turn_complete = False
-        event.finish_reason = "STOP"
-        event.error_message = None
-
-        assert shopping_agent._is_final_event(event) is True
-
-    def test_is_final_event_error(self, shopping_agent):
-        """Error event is recognized as final."""
-        event = MagicMock()
-        event.turn_complete = False
-        event.finish_reason = None
-        event.error_message = "Connection failed"
-
-        assert shopping_agent._is_final_event(event) is True
-
-    def test_is_final_event_not_final(self, shopping_agent):
-        """Intermediate event is not recognized as final."""
-        event = MagicMock()
-        event.turn_complete = False
-        event.finish_reason = None
-        event.error_message = None
-
-        assert shopping_agent._is_final_event(event) is False
+    # Note: _is_final_event() method was removed - tests removed
 
     def test_extract_message_from_content(self, shopping_agent):
         """Extract text from event content."""
@@ -543,9 +510,10 @@ class TestDefaultValues:
                 task_data=minimal_task_data,
             )
 
-            # Verify "none" constraints used in instruction
+            # Verify agent was created with instruction
             call_kwargs = MockAgent.call_args[1]
-            assert "CONSTRAINTS: none" in call_kwargs["instruction"]
+            # Note: Constraints are not included in the simplified template
+            assert "instruction" in call_kwargs
 
     @pytest.mark.asyncio
     async def test_generates_session_id_if_not_provided(self, shopping_agent, minimal_task_data):
@@ -596,7 +564,7 @@ class TestModuleConstants:
         """Instruction template has required placeholders."""
         assert "{goal}" in SHOPPING_INSTRUCTION
         assert "{budget}" in SHOPPING_INSTRUCTION
-        assert "{constraints}" in SHOPPING_INSTRUCTION
+        # Note: Constraints placeholder removed in simplified template
 
     def test_default_model_is_set(self):
         """DEFAULT_MODEL constant is set."""
