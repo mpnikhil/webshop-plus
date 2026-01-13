@@ -21,9 +21,6 @@ from src.agent import (
     WebShopPlusAgent,
 )
 from src.evaluator import Evaluator
-from src.messenger import (
-    TaskState,
-)
 from src.models import (
     AgentMemory,
     AssessmentConfig,
