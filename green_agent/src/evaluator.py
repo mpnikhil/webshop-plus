@@ -12,7 +12,11 @@ This module provides scoring logic for all 5 task types:
 import re
 from typing import Any, Optional
 
+import structlog
+
 from .llm_client import LLMClient
+
+logger = structlog.get_logger()
 from .models import (
     BudgetConstrainedTask,
     CartItem,
@@ -235,9 +239,8 @@ class Evaluator:
 
         # Calculate overall and determine success
         result.calculate_overall_score()
-        result.success = (
-            budget_score >= 0.8 and completion_score >= 0.8 and result.overall_score >= 0.6
-        )
+        # Task is successful if overall score is high enough
+        result.success = result.overall_score >= 0.7
 
         # Add metrics
         result.metrics = {
@@ -624,37 +627,40 @@ class Evaluator:
         for item in items:
             name = item.get("product_name", "").lower()
             attrs = item.get("attributes", {})
+            item_text = name + " " + " ".join(str(v).lower() for v in attrs.values())
 
             # Check if category matches (in name or attributes)
-            category_match = req_category in name or any(
-                req_category in str(v).lower() for v in attrs.values()
-            )
+            category_match = req_category in item_text
+            
+            # Try LLM fallback for category if simple match fails
+            if not category_match and self._llm_client:
+                if self._llm_check_positive_match(item_text, req_category):
+                    category_match = True
 
             # Check if required attributes match
-            # ALL required attributes must be satisfied for attr_match to be True
-            attr_match = len(req_attrs) > 0  # Need at least one attribute to check
-            for key, value in req_attrs.items():
-                value_lower = str(value).lower()
-                found = False
+            # ALL required attributes must be satisfied
+            attr_match = True 
+            if req_attrs:
+                for key, value in req_attrs.items():
+                    value_lower = str(value).lower()
+                    found = False
 
-                # Check if the required value appears in item name
-                if value_lower in name:
-                    found = True
-                else:
-                    # Check if the required value appears in any attribute value
-                    for attr_val in attrs.values():
-                        if value_lower in str(attr_val).lower():
-                            found = True
-                            break
+                    # Check simple containment
+                    if value_lower in item_text:
+                        found = True
+                    # Try LLM fallback for attribute if simple match fails
+                    elif self._llm_client and self._llm_check_positive_match(item_text, value_lower):
+                        found = True
 
-                if not found:
-                    attr_match = False
-                    break
+                    if not found:
+                        attr_match = False
+                        break
 
-            # Item matches if it satisfies BOTH category AND attributes,
-            # or if it satisfies all required attributes (which implies correct type)
-            if (category_match and attr_match) or (attr_match and len(req_attrs) > 0):
+            # Item matches if it satisfies BOTH category AND attributes
+            if category_match and attr_match:
                 return True
+
+        return False
 
         return False
 
@@ -719,6 +725,34 @@ class Evaluator:
         """Check if purchases are consistent with remembered preferences (stub)."""
         return 0.0, "Preference memory tasks not supported"
 
+    def _llm_check_constraint_violation(
+        self,
+        item_text: str,
+        forbidden_attribute: str,
+    ) -> bool:
+        """Use LLM to check if an item violates a negative constraint."""
+        if self._llm_client is None:
+            return True  # Fallback to strict string match assumption
+
+        prompt = f"""Does the following product actually HAVE the attribute "{forbidden_attribute}"?
+
+Product: {item_text}
+
+Reply YES if the product has this attribute.
+Reply NO if the product does NOT have this attribute (e.g., if it says "not {forbidden_attribute}" or is a different style).
+Only reply YES or NO."""
+
+        try:
+            messages = [{"role": "user", "content": prompt}]
+            logger.debug("LLM positive match prompt", prompt=prompt)
+            response = self._llm_client.complete(messages, max_tokens=1024)
+            logger.info("LLM positive match response", response=response)
+            return "yes" in response.lower()
+        except Exception as e:
+            logger.error("LLM positive match failed", error=str(e))
+            return False
+            return True
+
     def _check_constraint_violations(
         self,
         item: dict[str, Any],
@@ -735,13 +769,45 @@ class Evaluator:
 
         for attr in forbidden_attributes:
             if attr.lower() in item_text:
-                violations.append(f"forbidden attribute: {attr}")
+                # String match found, verify with LLM if available
+                if self._llm_client is None or self._llm_check_constraint_violation(item_text, attr):
+                    violations.append(f"forbidden attribute: {attr}")
 
         for term in forbidden_terms:
             if term.lower() in item_text:
-                violations.append(f"forbidden term: {term}")
+                # String match found, verify with LLM if available
+                if self._llm_client is None or self._llm_check_constraint_violation(item_text, term):
+                    violations.append(f"forbidden term: {term}")
 
         return violations
+
+    def _llm_check_positive_match(
+        self,
+        item_text: str,
+        required_attribute: str,
+    ) -> bool:
+        """Use LLM to check if an item semantically matches a requirement."""
+        if self._llm_client is None:
+            return False
+
+        prompt = f"""Does the following product satisfy the requirement "{required_attribute}"?
+
+Product: {item_text}
+
+Reply YES if it clearly satisfies the requirement or is a synonym/specific type of it.
+Reply NO if it does not match or is ambiguous.
+Only reply YES or NO."""
+
+        try:
+            messages = [{"role": "user", "content": prompt}]
+            logger.debug("LLM positive match prompt", prompt=prompt)
+            response = self._llm_client.complete(messages, max_tokens=1024)
+            logger.info("LLM positive match response", response=response)
+            return "yes" in response.lower()
+        except Exception as e:
+            logger.error("LLM positive match failed", error=str(e))
+            return False
+            return False
 
     def _check_positive_match(
         self,
@@ -764,7 +830,11 @@ class Evaluator:
 
         matched = 0
         for attr in required_attributes:
+            # Try simple string matching first
             if attr.lower() in all_item_text:
+                matched += 1
+            # Fallback to LLM semantic matching if available
+            elif self._llm_client is not None and self._llm_check_positive_match(all_item_text, attr):
                 matched += 1
 
         score = matched / len(required_attributes)
@@ -909,10 +979,20 @@ Score from 0-10 where:
         """Build a CartState from MCP cart items."""
         cart = CartState()
         for cart_dict in mcp_cart:
+            # Combine catalog attributes with user-selected options
+            attributes = {}
+            # First add catalog attributes (product features)
+            if "catalog_attributes" in cart_dict:
+                attributes.update(cart_dict["catalog_attributes"])
+            
+            # Then add/override with selected options
+            if "options" in cart_dict:
+                attributes.update(cart_dict["options"])
+
             item = CartItem(
                 product_id=cart_dict.get("product_id", ""),
                 product_name=cart_dict.get("name", ""),
-                attributes=cart_dict.get("options", {}),
+                attributes=attributes,
                 quantity=cart_dict.get("quantity", 1),
                 price=cart_dict.get("price", 0.0),
             )
@@ -939,12 +1019,72 @@ Score from 0-10 where:
             cart.add_item(item)
         return cart
 
+    def _llm_compare_carts(
+        self,
+        actual: CartState,
+        expected: CartState,
+    ) -> tuple[bool, str]:
+        """Use LLM to compare actual and expected carts semantically."""
+        if self._llm_client is None:
+            return False, "LLM client not available for semantic comparison"
+
+        # Format carts for prompt
+        def format_cart(cart):
+            lines = []
+            for item in cart.items:
+                attrs = ", ".join(f"{k}: {v}" for k, v in item.attributes.items())
+                lines.append(f"- Qty {item.quantity}: {item.product_name} ({attrs})")
+            return "\n".join(lines) or "Empty Cart"
+
+        prompt = f"""Compare these two shopping carts. The 'Expected Cart' defines the requirements, but the 'Actual Cart' might contain real products that satisfy those requirements even if names/IDs differ.
+
+EXPECTED CART (Goal):
+{format_cart(expected)}
+
+ACTUAL CART (Result):
+{format_cart(actual)}
+
+Does the Actual Cart satisfy the requirements of the Expected Cart?
+Ignore minor name differences or ID mismatches. Focus on whether the correct TYPES of items with correct ATTRIBUTES were purchased in the correct QUANTITIES.
+
+Reply YES if it matches.
+Reply NO if items are wrong, missing, or have incorrect attributes.
+Only reply YES or NO."""
+
+        try:
+            messages = [{"role": "user", "content": prompt}]
+            logger.debug("LLM cart comparison prompt", prompt=prompt)
+            response = self._llm_client.complete(messages, max_tokens=1024)
+            logger.info("LLM cart comparison response", response=response)
+            match = "yes" in response.lower()
+            return match, "LLM confirmed match" if match else "LLM rejected match"
+        except Exception as e:
+            logger.error("LLM cart comparison failed", error=str(e))
+            return False, f"LLM evaluation failed: {str(e)}"
+
     def _compare_carts(
         self,
         actual: CartState,
         expected: CartState,
     ) -> tuple[bool, str]:
-        """Compare actual cart to expected cart state."""
+        """Compare actual cart to expected cart state with LLM fallback."""
+        # Try strict matching first (fast path)
+        strict_match, strict_reason = self._strict_compare_carts(actual, expected)
+        if strict_match:
+            return True, strict_reason
+
+        # Fallback to LLM semantic matching if strict match fails
+        if self._llm_client:
+            return self._llm_compare_carts(actual, expected)
+
+        return False, strict_reason
+
+    def _strict_compare_carts(
+        self,
+        actual: CartState,
+        expected: CartState,
+    ) -> tuple[bool, str]:
+        """Compare actual cart to expected cart state using strict ID matching."""
         # Compare items
         if len(actual.items) != len(expected.items):
             return False, f"Item count mismatch: {len(actual.items)} vs {len(expected.items)} expected"
@@ -1057,7 +1197,7 @@ Answer with just "yes" or "no"."""
 
         try:
             messages = [{"role": "user", "content": prompt}]
-            response = self._llm_client.complete(messages, max_tokens=10)
+            response = self._llm_client.complete(messages, max_tokens=1024)
             return "yes" in response.lower()
         except Exception:
             # Fallback to True if LLM fails (benefit of doubt)

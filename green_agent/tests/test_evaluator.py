@@ -288,6 +288,9 @@ class TestBudgetTaskEvaluation:
 
     def test_perfect_budget_task(self, evaluator, basic_mcp_session, budget_task):
         """Test perfect budget task completion."""
+        # Ensure LLM confirms positive matches
+        evaluator.llm_client.complete.return_value = "yes"
+        
         # Add cart items that meet all requirements
         add_mcp_cart_item(basic_mcp_session, "mouse-001", "Wireless Gaming Mouse",
                           25.0, {"type": "wireless mouse"})
@@ -506,6 +509,8 @@ class TestConstraintTaskEvaluation:
 
     def test_forbidden_attribute_violation(self, evaluator, basic_mcp_session, constraint_task):
         """Test detection of forbidden attribute."""
+        # Ensure LLM confirms violation
+        evaluator.llm_client.complete.return_value = "yes"
         add_mcp_cart_item(basic_mcp_session, "laptop-001", "Gaming Laptop with RGB",
                           999.0, {"type": "laptop"})
 
@@ -517,6 +522,8 @@ class TestConstraintTaskEvaluation:
 
     def test_forbidden_term_violation(self, evaluator, basic_mcp_session, constraint_task):
         """Test detection of forbidden term."""
+        # Ensure LLM confirms violation
+        evaluator.llm_client.complete.return_value = "yes"
         add_mcp_cart_item(basic_mcp_session, "laptop-001", "Laptop with GeForce RTX Graphics",
                           1200.0, {"type": "laptop"})
 
@@ -527,6 +534,8 @@ class TestConstraintTaskEvaluation:
 
     def test_multiple_violations(self, evaluator, basic_mcp_session, constraint_task):
         """Test multiple constraint violations."""
+        # Ensure LLM confirms violations
+        evaluator.llm_client.complete.return_value = "yes"
         add_mcp_cart_item(basic_mcp_session, "laptop-001", "Gaming Laptop with RGB and GeForce",
                           1500.0, {"type": "gaming laptop"})
 
@@ -939,6 +948,9 @@ class TestRealTaskData:
 
     def test_realistic_budget_scenario(self, evaluator, basic_mcp_session):
         """Test with realistic budget task scenario."""
+        # Ensure LLM confirms matches
+        evaluator.llm_client.complete.return_value = "yes"
+        
         task = BudgetConstrainedTask(
             task_id="budget_realistic",
             task_type=TaskType.BUDGET_CONSTRAINED,

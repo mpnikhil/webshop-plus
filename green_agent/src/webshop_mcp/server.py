@@ -959,6 +959,51 @@ def click(element_id: str) -> dict[str, Any]:
 
 
 @mcp.tool()
+def add_to_cart() -> dict[str, Any]:
+    """Add the current product to cart.
+
+    Use this when viewing a product detail page to add it to your cart.
+    This is equivalent to click("add_to_cart").
+
+    Returns:
+        Cart update confirmation or error if not on product page.
+    """
+    state = get_current_state()
+
+    # Check turn limit first
+    if state.increment_turn():
+        return _terminal_max_turns(state)
+
+    # Validate action exists
+    if "add_to_cart" not in state.visible_elements:
+        # Record failed action in history
+        state.history.append({
+            "action": "add_to_cart",
+            "error": "action_not_available",
+            "turn": state.turn_count,
+        })
+        return {
+            "error": "add_to_cart action not available. You must be on a product page.",
+            "page": state.current_page,
+            "turn": state.turn_count,
+            "turns_remaining": state.max_turns - state.turn_count,
+        }
+
+    element = state.visible_elements["add_to_cart"]
+
+    # Record action in history
+    state.history.append({
+        "action": "click",  # Log as click to match evaluation expectations
+        "element_id": "add_to_cart",
+        "element_type": "add_to_cart",
+        "turn": state.turn_count,
+        "product_asin": element.get("asin") or element.get("product", {}).get("asin", "")
+    })
+
+    return _add_to_cart(state, element)
+
+
+@mcp.tool()
 def checkout() -> dict[str, Any]:
     """Complete purchase and end session. TERMINAL action.
 

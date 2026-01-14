@@ -1,0 +1,17 @@
+# WebShop+ Full Assessment Scenario
+# Complete evaluation with all 80 tasks across all categories
+
+[green_agent]
+endpoint = "http://127.0.0.1:8000"
+
+[[participants]]
+role = "shopper"
+endpoint = "http://purple:8001/a2a"
+
+[config]
+# Full assessment - all 80 tasks
+num_tasks = 80
+task_types = ["all"]
+timeout_per_task = 300
+include_memory_tasks = true
+max_steps_per_task = 50

@@ -29,6 +29,7 @@ from a2a.types import (
 from .agent import AgentConfig, WebShopPlusAgent
 from .webshop_mcp import SessionManager, is_session_completed, get_final_result
 from .models import AssessmentConfig, TaskUpdate
+from .llm_client import LLMClient
 
 logger = structlog.get_logger()
 
@@ -211,6 +212,7 @@ class WebShopPlusExecutor(AgentExecutor):
         session_manager: Optional[SessionManager] = None,
         mcp_host: str = "localhost",
         mcp_port: int = 8000,
+        llm_client: Optional[LLMClient] = None,
     ):
         """Initialize the executor.
 
@@ -219,11 +221,13 @@ class WebShopPlusExecutor(AgentExecutor):
             session_manager: Optional SessionManager for MCP sessions.
             mcp_host: Host for MCP URI generation.
             mcp_port: Port for MCP URI generation.
+            llm_client: Optional LLMClient for semantic evaluation.
         """
         self._agent_config = agent_config or AgentConfig()
         self._session_manager = session_manager
         self._mcp_host = mcp_host
         self._mcp_port = mcp_port
+        self._llm_client = llm_client
         self._active_agents: dict[str, WebShopPlusAgent] = {}
         self._simple_task_states: dict[str, dict] = {}  # Track simple echo tasks
 
@@ -342,6 +346,7 @@ class WebShopPlusExecutor(AgentExecutor):
             async with WebShopPlusAgent(
                 config=self._agent_config,
                 session_manager=self._session_manager,
+                llm_client=self._llm_client,
             ) as agent:
                 # Store agent for potential cancellation
                 self._active_agents[task_id] = agent

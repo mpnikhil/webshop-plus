@@ -1,0 +1,17 @@
+# WebShop+ Quick Test Scenario
+# Run with: python generate_compose.py --scenario scenario_quick.toml
+
+[green_agent]
+image = "ghcr.io/mpnikhil/webshop-plus-green:latest"
+env = { OPENAI_API_KEY = "${OPENAI_API_KEY}", OPENAI_API_BASE = "https://api.tokenfactory.nebius.com/v1/", LLM_MODEL = "openai/Qwen/Qwen3-32B" }
+
+[[participants]]
+name = "shopper"
+image = "ghcr.io/mpnikhil/webshop-plus-purple:latest"
+env = { OPENAI_API_KEY = "${OPENAI_API_KEY}", OPENAI_API_BASE = "https://api.tokenfactory.nebius.com/v1/", LLM_MODEL = "openai/Qwen/Qwen3-32B" }
+
+[config]
+num_tasks = 8
+task_types = ["all"]
+timeout_per_task = 300
+include_memory_tasks = false

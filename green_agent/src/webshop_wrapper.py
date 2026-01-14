@@ -538,7 +538,7 @@ class WebShopWrapper:
             asin=session["asin"],
             options=session["options"],
             instruction_text=session["goal"]["instruction_text"],
-            show_attrs=False,
+            show_attrs=True,
         )
 
         return 0.0, False

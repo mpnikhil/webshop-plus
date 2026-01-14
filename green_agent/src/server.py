@@ -35,6 +35,7 @@ from a2a.types import (
 
 from src.a2a_executor import WebShopPlusExecutor
 from src.agent import AgentConfig
+from src.llm_client import LLMClient
 from src.webshop_mcp import SessionManager
 from src.webshop_mcp.server import (
     current_session_id,
@@ -433,11 +434,16 @@ def create_app(
     # Create SDK components
     agent_card = create_sdk_agent_card(card_url)
     task_store = InMemoryTaskStore()
+    
+    # Create LLM client for evaluation
+    llm_client = LLMClient()
+    
     executor = WebShopPlusExecutor(
         agent_config=AgentConfig(mcp_host=mcp_host, mcp_port=port),
         session_manager=session_manager,
         mcp_host=mcp_host,
         mcp_port=port,
+        llm_client=llm_client,
     )
 
     # Create the SDK request handler

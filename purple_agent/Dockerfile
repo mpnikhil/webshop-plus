@@ -18,7 +18,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
 
 # Copy dependency files first for better layer caching
-COPY pyproject.toml ./
+COPY purple_agent/pyproject.toml ./
 
 # Create virtual environment and install dependencies
 RUN uv venv .venv && \
@@ -26,7 +26,7 @@ RUN uv venv .venv && \
     uv sync --no-dev
 
 # Copy source code
-COPY src/ ./src/
+COPY purple_agent/src/ ./src/
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1
