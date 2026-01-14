@@ -33,11 +33,9 @@ from src.models import (
     EvaluationResult,
     OptimizationGoal,
     RequiredItem,
-    SessionState,
     Task,
     TaskType,
 )
-from src.state_manager import StateManager
 from src.task_generator import TaskGenerator
 
 
@@ -141,22 +139,6 @@ class TestWebShopPlusAgent:
         return mock
 
     @pytest.fixture
-    def mock_state_manager(self):
-        """Create mock state manager."""
-        mock = MagicMock(spec=StateManager)
-
-        session = SessionState(
-            session_id="test-session",
-            task_id="budget-1",
-            agent_id="test-agent",
-        )
-        mock.create_session.return_value = session
-        mock.get_session.return_value = session
-        mock.get_agent_memory.return_value = AgentMemory(agent_id="test-agent")
-
-        return mock
-
-    @pytest.fixture
     def mock_webshop(self):
         """Create mock WebShop wrapper."""
         from src.webshop_wrapper import StepResult
@@ -209,25 +191,22 @@ class TestWebShopPlusAgent:
         task_gen = agent.task_generator
         assert agent._task_generator is not None
 
-        assert agent._state_manager is None
-        state_mgr = agent.state_manager
-        assert agent._state_manager is not None
+        assert agent._webshop is None
+        webshop = agent.webshop
+        assert agent._webshop is not None
 
     def test_agent_with_provided_components(
         self,
         mock_task_generator,
-        mock_state_manager,
         mock_evaluator,
     ):
         """Test agent with provided components."""
         agent = WebShopPlusAgent(
             task_generator=mock_task_generator,
-            state_manager=mock_state_manager,
             evaluator=mock_evaluator,
         )
 
         assert agent.task_generator is mock_task_generator
-        assert agent.state_manager is mock_state_manager
         assert agent.evaluator is mock_evaluator
 
     def test_select_tasks_all(self, mock_task_generator):
@@ -311,13 +290,20 @@ class TestOrchestrationIntegration:
     @pytest.mark.asyncio
     async def test_finalize_task(self):
         """Test task finalization."""
-        state_manager = StateManager()
+        from src.webshop_mcp.session_state import SessionState as MCPSessionState
         evaluator = Evaluator()
 
-        # Create a session
-        session = state_manager.create_session("budget-1", "test-agent")
-        session.record_action("search[shoes]", "Found 10 products", 0.0)
-        session.record_action("click[buy now]", "Purchase complete", 0.9)
+        # Create a session state
+        mcp_state = MCPSessionState(
+            session_id="test-session",
+            goal="Find shoes under $50",
+            budget=50.0
+        )
+        mcp_state.history = [
+            {"action": "search", "query": "shoes", "turn": 1},
+            {"action": "click", "element_id": "buy-now", "turn": 2}
+        ]
+        mcp_state.completed = True
 
         # Create a simple task
         task = BudgetConstrainedTask(
@@ -332,7 +318,7 @@ class TestOrchestrationIntegration:
         # Create result
         result = TaskExecutionResult(
             task_id="budget-1",
-            session_id=session.session_id,
+            session_id="test-session",
             completed=True,
             total_reward=0.9,
             actions_taken=2,
@@ -340,10 +326,9 @@ class TestOrchestrationIntegration:
 
         # Create agent and finalize
         agent = WebShopPlusAgent(
-            state_manager=state_manager,
             evaluator=evaluator,
         )
-        agent._finalize_task(result, session, task, None)
+        agent._finalize_task(result, task, mcp_state)
 
         # Check that evaluation was added
         assert result.evaluation is not None
@@ -397,63 +382,6 @@ class TestOrchestrationIntegration:
         assert "negative_constraint" in assessment.aggregate.by_task_type
         assert assessment.aggregate.by_task_type["budget_constrained"]["count"] == 2
         assert assessment.aggregate.by_task_type["negative_constraint"]["count"] == 1
-
-
-# =============================================================================
-# State Manager Integration Tests
-# =============================================================================
-
-
-class TestStateManagerIntegration:
-    """Integration tests for state manager with orchestration."""
-
-    def test_session_lifecycle(self):
-        """Test complete session lifecycle."""
-        state_manager = StateManager()
-
-        # Create session
-        session = state_manager.create_session("task-1", "agent-1")
-        assert session.session_id in state_manager
-
-        # Record actions
-        state_manager.record_action(
-            session.session_id,
-            "search[shoes]",
-            "Found 10 products",
-            0.0,
-        )
-        state_manager.record_action(
-            session.session_id,
-            "click[buy now]",
-            "Purchase complete",
-            0.9,
-        )
-
-        # Complete session
-        summary = state_manager.complete_session(session.session_id, "budget_constrained")
-
-        assert session.completed is True
-        assert session.actions_taken == 2
-        assert summary.task_type == "budget_constrained"
-
-    def test_agent_memory_tracking(self):
-        """Test agent memory across sessions."""
-        state_manager = StateManager()
-
-        # Session 1
-        session1 = state_manager.create_session("task-1", "agent-1")
-        session1.preferences_established = {"color": "blue"}
-        state_manager.complete_session(session1.session_id, "preference_memory")
-
-        # Session 2
-        session2 = state_manager.create_session("task-2", "agent-1")
-        state_manager.complete_session(session2.session_id, "preference_memory")
-
-        # Check memory
-        memory = state_manager.get_agent_memory("agent-1")
-        assert len(memory.sessions) == 2
-        all_prefs = memory.get_all_preferences()
-        assert "color" in all_prefs
 
 
 if __name__ == "__main__":

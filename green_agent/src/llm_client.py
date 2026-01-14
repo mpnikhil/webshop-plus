@@ -10,6 +10,7 @@ Configuration:
 """
 
 import os
+import re
 from typing import Optional
 
 import litellm
@@ -98,12 +99,19 @@ class LLMClient:
         max_tokens: Optional[int] = None,
     ) -> dict:
         """Build kwargs for litellm.completion call."""
+        # Standard OpenAI Parameters
         kwargs = {
             "model": self.config.model,
             "messages": messages,
-            "temperature": temperature if temperature is not None else self.config.temperature,
+            "temperature": temperature if temperature is not None else 0.6,
+            "top_p": 0.95,
             "max_tokens": max_tokens if max_tokens is not None else self.config.max_tokens,
             "timeout": self.config.timeout,
+            # Nebius/vLLM Specific Parameters
+            "extra_body": {
+                "top_k": 20,
+                "min_p": 0
+            }
         }
 
         # Add API key if provided (for cloud providers)
@@ -115,6 +123,10 @@ class LLMClient:
             kwargs["api_base"] = self.config.api_base
 
         return kwargs
+
+    def _clean_content(self, content: str) -> str:
+        """Strip thinking tags from content."""
+        return re.sub(r"<think>.*?</think>\s*", "", content, flags=re.DOTALL)
 
     def complete(
         self,
@@ -144,10 +156,22 @@ class LLMClient:
             ... ])
             >>> print(response)  # "4"
         """
+        # 1) add /think at the end of ur prompt to enable thinking
+        if messages and messages[-1].get("role") == "user":
+            messages[-1]["content"] += "\n\n/think"
+
         kwargs = self._get_completion_kwargs(messages, temperature, max_tokens)
         response = litellm.completion(**kwargs)
 
-        return response.choices[0].message.content
+        raw_content = response.choices[0].message.content
+        
+        # 2) print the raw response from the llm
+        print(f"[RAW LLM RESPONSE]:\n{raw_content}\n[END RAW LLM RESPONSE]")
+
+        # 3) strip the thinking tags
+        clean_content = self._clean_content(raw_content)
+
+        return clean_content
 
     def complete_with_response(
         self,
@@ -223,8 +247,8 @@ class LLMClient:
                 augmented_messages.insert(1, msg)
 
         # Use lower temperature for more focused reasoning
-        temp = temperature if temperature is not None else 0.3
-        tokens = max_tokens if max_tokens is not None else 4096
+        temp = temperature if temperature is not None else 0.6
+        tokens = max_tokens if max_tokens is not None else 8192
 
         return self.complete(augmented_messages, temperature=temp, max_tokens=tokens)
 
@@ -266,7 +290,7 @@ class LLMClient:
             },
         ]
 
-        response = self.complete(messages, temperature=0.2, max_tokens=1024)
+        response = self.complete(messages, temperature=0.6, max_tokens=1024)
 
         # Parse score from response
         score = 0

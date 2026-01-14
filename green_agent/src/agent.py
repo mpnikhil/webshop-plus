@@ -82,7 +82,7 @@ class WebShopPlusAgent:
 
     This agent coordinates:
     - Task selection and loading from TaskGenerator
-    - Session management via StateManager
+    - Session management via SessionManager
     - WebShop environment interaction via WebShopWrapper
     - A2A communication with purple agents via PurpleAgentClient
     - MCP-based tool execution via SessionManager

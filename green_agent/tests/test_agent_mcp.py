@@ -24,7 +24,6 @@ from src.models import (
     NegativeConstraints,
     OptimizationGoal,
     RequiredItem,
-    SessionState,
     TaskType,
 )
 from src.purple_client import PurpleAgentClient, TaskResult, TaskError
@@ -75,20 +74,6 @@ def negative_constraint_task():
             budget=75.0,
         ),
     )
-
-
-@pytest.fixture
-def mock_state_manager():
-    """Mock state manager."""
-    manager = MagicMock()
-    session = SessionState(
-        session_id="test-session-123",
-        task_id="test-task",
-        agent_id="test-agent",
-    )
-    manager.create_session.return_value = session
-    manager.get_session.return_value = session
-    return manager
 
 
 @pytest.fixture
@@ -275,14 +260,12 @@ class TestExecuteTaskMCP:
         self,
         mcp_agent_config,
         budget_task,
-        mock_state_manager,
         mock_session_manager,
         mock_evaluator,
     ):
         """Successful MCP task execution."""
         agent = WebShopPlusAgent(
             config=mcp_agent_config,
-            state_manager=mock_state_manager,
             session_manager=mock_session_manager,
             evaluator=mock_evaluator,
         )
@@ -330,13 +313,11 @@ class TestExecuteTaskMCP:
         self,
         mcp_agent_config,
         budget_task,
-        mock_state_manager,
         mock_evaluator,
     ):
         """MCP execution works without session manager (no MCP URI)."""
         agent = WebShopPlusAgent(
             config=mcp_agent_config,
-            state_manager=mock_state_manager,
             evaluator=mock_evaluator,
             session_manager=None,  # No session manager
         )
@@ -376,7 +357,6 @@ class TestExecuteTaskMCP:
         self,
         mcp_agent_config,
         budget_task,
-        mock_state_manager,
         mock_evaluator,
     ):
         """MCP task execution handles failure."""
@@ -411,7 +391,6 @@ class TestExecuteTaskMCP:
 
         agent = WebShopPlusAgent(
             config=mcp_agent_config,
-            state_manager=mock_state_manager,
             session_manager=mock_session_manager,
             evaluator=mock_evaluator,
         )
@@ -449,7 +428,6 @@ class TestExecuteTaskMCP:
         self,
         mcp_agent_config,
         budget_task,
-        mock_state_manager,
         mock_evaluator,
     ):
         """MCP execution handles PurpleAgentClient errors."""
@@ -461,7 +439,6 @@ class TestExecuteTaskMCP:
 
         agent = WebShopPlusAgent(
             config=mcp_agent_config,
-            state_manager=mock_state_manager,
             session_manager=mock_session_manager,
             evaluator=mock_evaluator,
         )
@@ -500,13 +477,11 @@ class TestTaskDispatch:
         self,
         mcp_agent_config,
         budget_task,
-        mock_state_manager,
         mock_evaluator,
     ):
         """Task dispatches to MCP path."""
         agent = WebShopPlusAgent(
             config=mcp_agent_config,
-            state_manager=mock_state_manager,
             evaluator=mock_evaluator,
         )
 
@@ -547,14 +522,12 @@ class TestSessionManagerIntegration:
         self,
         mcp_agent_config,
         budget_task,
-        mock_state_manager,
         mock_session_manager,
         mock_evaluator,
     ):
         """MCP session is created with correct parameters."""
         agent = WebShopPlusAgent(
             config=mcp_agent_config,
-            state_manager=mock_state_manager,
             session_manager=mock_session_manager,
             evaluator=mock_evaluator,
         )
@@ -594,7 +567,6 @@ class TestSessionManagerIntegration:
         self,
         mcp_agent_config,
         budget_task,
-        mock_state_manager,
         mock_evaluator,
     ):
         """MCP session result is extracted and merged."""
@@ -618,6 +590,7 @@ class TestSessionManagerIntegration:
             {"name": "Shoes", "price": 45.0, "product_id": "B001", "quantity": 1, "options": {}}
         ]
         mcp_state.completed = True
+        mcp_state.turn_count = 3
 
         # Async methods
         mock_session_manager.create_session = AsyncMock(return_value=None)
@@ -625,15 +598,9 @@ class TestSessionManagerIntegration:
         mock_session_manager.cleanup_session = AsyncMock(return_value=True)
         # Sync methods
         mock_session_manager.is_session_completed.return_value = True
-        mock_session_manager.get_final_result.return_value = {
-            "success": True,
-            "turns_used": 3,
-            "reward": 0.85,
-        }
 
         agent = WebShopPlusAgent(
             config=mcp_agent_config,
-            state_manager=mock_state_manager,
             session_manager=mock_session_manager,
             evaluator=mock_evaluator,
         )
@@ -643,6 +610,7 @@ class TestSessionManagerIntegration:
             task_id="t1",
             context_id="c1",
             final_state=TaskState.completed,
+            result_data={"turns_used": 3}
         )
 
         with patch.object(
@@ -661,12 +629,10 @@ class TestSessionManagerIntegration:
                     agent_id="test-agent",
                 )
 
-        # After sync, evaluation session should have 3 actions from MCP history
-        # Check the evaluation session state
-        eval_session = mock_state_manager.get_session.return_value
-        assert len(eval_session.actions) == 3
         assert result.completed is True
-        assert result.total_reward == 0.85
+        assert result.actions_taken == 3
+        assert result.evaluation is not None
+        assert result.evaluation.success is True
 
 
 if __name__ == "__main__":
