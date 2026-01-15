@@ -134,88 +134,69 @@ This creates:
 - `docker-compose.yml` - Container orchestration
 - `a2a-scenario.toml` - Assessment configuration
 
-### 3. Manual Fixes (Required)
+### 3. Manual Fixes (Required for Local ARM Macs)
 
-⚠️ **IMPORTANT**: After running `generate_compose.py`, you MUST manually edit `docker-compose.yml`:
+⚠️ **IMPORTANT**: After running `generate_compose.py`, the generated `docker-compose.yml` defaults to `linux/amd64`. You MUST manually edit it for local testing on ARM:
 
-#### Fix 1: Remove Platform Constraints (3 places)
-
-Remove these lines that cause "no matching manifest" errors on ARM Macs:
-
-```yaml
-# Remove from green-agent service (around line 63):
-    platform: linux/amd64
-
-# Remove from shopper service (around line 97):
-    platform: linux/amd64
-
-# Remove from agentbeats-client service (around line 80):
-    platform: linux/amd64
-```
+#### Fix 1: Remove Platform Constraints
+Delete the `platform: linux/amd64` line from all services (`green-agent`, `shopper`, and `agentbeats-client`). This allows Docker to use your native ARM64 local builds.
 
 #### Fix 2: Add --advertise-host Flag to Green Agent
+Update the `green-agent` command to include `--advertise-host green-agent`. This ensures the Green Agent generates MCP URIs that other containers can resolve.
 
-Update the green-agent command to include the `--advertise-host` flag:
-
-**Before** (line 7):
-```yaml
-command: ["--host", "0.0.0.0", "--port", "9009", "--card-url", "http://green-agent:9009"]
-```
-
-**After**:
+**Final command should look like**:
 ```yaml
 command: ["--host", "0.0.0.0", "--port", "9009", "--card-url", "http://green-agent:9009", "--advertise-host", "green-agent"]
 ```
 
-**Why**: The `--advertise-host` flag tells the green agent to advertise itself using the Docker service name instead of the container's internal hostname, which is required for proper A2A communication.
+---
 
-**Note**: These manual steps are temporary. The `generate_compose.py` script will be updated to include these fixes automatically in the future.
+## Local Inference Configuration
 
-### 4. Configure Environment
-```bash
-# Create .env file with your API key
-echo "OPENAI_API_KEY=your_nebius_api_key_here" > .env
-```
+When testing locally with a model running on your Mac (e.g., LM Studio or Ollama), we have provided a helper environment file `agentbeats-leaderboard-template/env.local`. 
 
-### 5. Run Local Test
-```bash
-# Clean up any old containers
-docker compose down
+To use it:
 
-# Start assessment
-docker compose up
+1.  **Configure Environment**:
+    Update `agentbeats-leaderboard-template/env.local` if your local port is different:
+    ```bash
+    # Point to the Docker bridge to reach your Mac's host services
+    OPENAI_API_BASE=http://host.docker.internal:1234/v1
+    ```
 
-# Or run in background
-docker compose up -d
-```
+2.  **Run with Local Environment**:
+    Use the `--env-file` flag to tell Docker Compose to use these settings:
+    ```bash
+    cd agentbeats-leaderboard-template
+    docker compose --env-file env.local up --force-recreate --no-pull
+    ```
 
-**Key Point**: Docker uses your **local images first** before pulling from the registry. So even though `docker-compose.yml` references `ghcr.io/mpnikhil/...`, it will use your locally built images.
+---
 
-### 6. Monitor Progress
-```bash
-# Follow all logs
-docker compose logs -f
+## High-Speed Local Workflow
 
-# Follow specific service
-docker compose logs -f agentbeats-client  # Assessment progress
-docker compose logs -f shopper            # Shopping actions
-docker compose logs -f green-agent        # Evaluation logs
+To iterate quickly without waiting for slow AMD64 emulation:
 
-# Filter for key events
-docker compose logs -f agentbeats-client | grep -E "task_id|Status:|Assessment complete"
-```
+1.  **Build Native Images**:
+    ```bash
+    cd /Users/nikhilpujari/agentbeats/webshop-plus
+    ./build_and_push.sh  # Automatically detects native architecture for local builds
+    ```
 
-### 7. Check Results
-```bash
-# View aggregate results
-cat output/results.json | jq '.results[0].aggregate'
+2.  **Generate & Fix Compose**:
+    ```bash
+    cd ../webshop-plus-leaderboard
+    python generate_compose.py --scenario scenario.toml
+    # (Apply the Manual Fixes described above)
+    ```
 
-# View by task type
-cat output/results.json | jq '.results[0].aggregate.by_task_type'
+3.  **Run with Force Recreate**:
+    ```bash
+    # Picks up local images and forces fresh start
+    docker compose --env-file env.local up --force-recreate --pull never
+    ```
 
-# View individual tasks
-cat output/results.json | jq '.results[0].results[] | {task_id, task_type, success, overall_score}'
-```
+**Key Point**: Docker uses your **local images first** before pulling from the registry. The `--no-pull` flag ensures you are testing exactly what you just built.
 
 ---
 

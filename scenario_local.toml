@@ -1,0 +1,17 @@
+# WebShop+ Local Test Scenario
+# For use with local inference (LM Studio/Ollama) via .env file
+# Run with: python generate_compose.py --scenario scenario_local.toml
+
+[green_agent]
+image = "ghcr.io/mpnikhil/webshop-plus-green:latest"
+env = { OPENAI_API_KEY = "${OPENAI_API_KEY}", OPENAI_API_BASE = "${OPENAI_API_BASE}", LLM_MODEL = "${LLM_MODEL}" }
+
+[[participants]]
+name = "shopper"
+image = "ghcr.io/mpnikhil/webshop-plus-purple:latest"
+env = { OPENAI_API_KEY = "${OPENAI_API_KEY}", OPENAI_API_BASE = "${OPENAI_API_BASE}", LLM_MODEL = "${LLM_MODEL}" }
+
+[config]
+num_tasks = 5
+task_types = ["budget_constrained", "preference_memory", "negative_constraint", "comparative_reasoning", "error_recovery"]
+timeout_per_task = 300

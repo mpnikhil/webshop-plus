@@ -486,20 +486,21 @@ class WebShopPlusAgent:
             # Limit to requested number
             return all_tasks[:num_tasks]
 
-    def _extract_task_kickoff_data(self, task: Task) -> tuple[str, float, list[str]]:
-        """Extract goal, budget, and constraints from a task.
+    def _extract_task_kickoff_data(self, task: Task) -> tuple[str, float, list[str], str]:
+        """Extract goal, budget, constraints, and user history from a task.
 
         Args:
             task: The task to extract data from.
 
         Returns:
-            Tuple of (goal, budget, constraints).
+            Tuple of (goal, budget, constraints, user_history).
         """
         goal = task.instruction
 
         # Extract budget from task constraints if available
         budget = self.config.default_budget
         constraints: list[str] = []
+        user_history: str = ""
 
         if isinstance(task, BudgetConstrainedTask):
             budget = task.constraints.budget
@@ -528,7 +529,18 @@ class WebShopPlusAgent:
                 for attr in task.constraints.required_attributes:
                     constraints.append(f"REQUIRE: {attr}")
 
-        return goal, budget, constraints
+        elif isinstance(task, PreferenceMemoryTask):
+            # Compile session sequence into a history string
+            history_lines = []
+            for i, session in enumerate(task.session_sequence):
+                history_lines.append(f"Session {i+1}:")
+                history_lines.append(f"  Request: {session.instruction}")
+                if session.establishes:
+                    preferences = ", ".join(f"{k}={v}" for k, v in session.establishes.items())
+                    history_lines.append(f"  Outcome: User established preference for [{preferences}]")
+            user_history = "\n".join(history_lines)
+
+        return goal, budget, constraints, user_history
 
     def _get_mcp_uri(self, session_id: str) -> str:
         """Build the MCP URI for a session.
@@ -567,7 +579,7 @@ class WebShopPlusAgent:
         )
 
         # Extract task data for kickoff
-        goal, budget, constraints = self._extract_task_kickoff_data(task)
+        goal, budget, constraints, user_history = self._extract_task_kickoff_data(task)
 
         # Create MCP session
         mcp_session_id: Optional[str] = None
@@ -621,6 +633,7 @@ class WebShopPlusAgent:
                     goal=goal,
                     budget=budget,
                     constraints=constraints,
+                    user_history=user_history,
                     mcp_uri=mcp_uri,
                 )
 
