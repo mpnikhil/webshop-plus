@@ -111,9 +111,7 @@ class Evaluator:
         if task_type == TaskType.BUDGET_CONSTRAINED:
             return self.evaluate_budget_task(mcp_state, task, result)
         elif task_type == TaskType.PREFERENCE_MEMORY:
-            # Skip preference memory tasks (not supported without multi-session)
-            result.error = "Preference memory tasks are not currently supported"
-            return result
+            return self.evaluate_memory_task(mcp_state, task, result)
         elif task_type == TaskType.NEGATIVE_CONSTRAINT:
             return self.evaluate_constraint_task(mcp_state, task, result)
         elif task_type == TaskType.COMPARATIVE_REASONING:
@@ -259,7 +257,20 @@ class Evaluator:
         task: PreferenceMemoryTask,
         result: Optional[EvaluationResult] = None,
     ) -> EvaluationResult:
-        """Preference memory tasks are not supported without multi-session execution."""
+        """
+        Evaluate a preference memory task using MCP state.
+
+        Scoring formula:
+            overall = recall_accuracy * recall_weight + consistency * consistency_weight
+
+        Args:
+            mcp_state: MCP session state with cart.
+            task: The preference memory task definition.
+            result: Optional pre-populated result.
+
+        Returns:
+            EvaluationResult with memory task scoring.
+        """
         if result is None:
             result = EvaluationResult(
                 task_id=task.task_id,
@@ -269,7 +280,44 @@ class Evaluator:
                 time_elapsed_seconds=0.0,
             )
 
-        result.error = "Preference memory tasks require multi-session execution (not yet implemented)"
+        memory_test = task.memory_test
+        weights = task.evaluation_criteria
+
+        # 1. Check recall accuracy (Did they buy an item matching the recalled attribute?)
+        recall_score, recall_explanation = self._check_preference_recall(
+            mcp_state,
+            task,
+        )
+
+        result.add_component(
+            name="recall_accuracy",
+            weight=weights.recall_accuracy_weight,
+            raw_value=memory_test.acceptable_values,
+            normalized_score=recall_score,
+            explanation=recall_explanation,
+        )
+
+        # 2. Consistency (For now, just a placeholder or mapped to recall)
+        # In single-shot simplified memory, consistency is implicitly tested by the recall itself
+        consistency_score = recall_score
+        consistency_explanation = "Consistency implied by accurate recall in single-session test"
+
+        result.add_component(
+            name="consistency",
+            weight=weights.consistency_weight,
+            raw_value=None,
+            normalized_score=consistency_score,
+            explanation=consistency_explanation,
+        )
+
+        result.calculate_overall_score()
+        result.success = result.overall_score >= 0.7
+
+        result.metrics = {
+            "attribute_to_recall": memory_test.attribute_to_recall,
+            "acceptable_values": memory_test.acceptable_values,
+        }
+
         return result
 
     def evaluate_constraint_task(
@@ -708,14 +756,96 @@ class Evaluator:
         """Extract preferences that should be remembered from task sequence (stub)."""
         return {}
 
+    def _format_user_history(self, task: PreferenceMemoryTask) -> str:
+        """Format user history from task session sequence."""
+        if task.user_history_text:
+            return task.user_history_text
+
+        history_lines = []
+        for i, session in enumerate(task.session_sequence):
+            history_lines.append(f"Session {i+1}:")
+            history_lines.append(f"  Request: {session.instruction}")
+            if session.establishes:
+                preferences = ", ".join(f"{k}={v}" for k, v in session.establishes.items())
+                history_lines.append(f"  Outcome: User established preference for [{preferences}]")
+        return "\n".join(history_lines)
+
     def _check_preference_recall(
         self,
         mcp_state: MCPSessionState,
-        attribute: str,
-        acceptable_values: list[str],
+        task: PreferenceMemoryTask,
     ) -> tuple[float, str]:
-        """Check if the agent correctly recalled a preference (stub)."""
-        return 0.0, "Preference memory tasks not supported"
+        """Check if the agent correctly recalled a preference using LLM-as-a-judge.
+
+        Constructs a prompt with history and all purchased items, asking LLM to verify overall match.
+        """
+        purchased_items = self._get_purchased_items(mcp_state)
+        if not purchased_items:
+            return 0.0, "No items purchased to verify preference"
+
+        # Summarize all purchased items
+        items_summary = []
+        for i, item in enumerate(purchased_items):
+            item_desc = (
+                item.get("product_name", "")
+                + " "
+                + " ".join(str(v) for v in item.get("attributes", {}).values())
+            )
+            items_summary.append(f"Item {i+1}: {item_desc}")
+        
+        all_items_text = "\n".join(items_summary)
+        user_history = self._format_user_history(task)
+        attribute = task.memory_test.attribute_to_recall
+        
+        # If no LLM, fallback to simple string match on ANY item
+        if self._llm_client is None:
+            for item_text in items_summary:
+                for val in task.memory_test.acceptable_values:
+                    if val.lower() in item_text.lower():
+                        return 1.0, f"Match found (fallback): {val}"
+            return 0.0, "No match found in any item (LLM unavailable)"
+
+        acceptable_str = ", ".join(task.memory_test.acceptable_values)
+
+        prompt = f"""You are evaluating if a shopping agent correctly recalled a user's preference.
+
+USER HISTORY:
+{user_history}
+
+MEMORY TEST:
+The user has an established preference for: {attribute}
+Acceptable Matches (Synonyms): {acceptable_str}
+
+PURCHASED ITEMS:
+{all_items_text}
+
+QUESTION:
+Based on the User History, did the agent respect the user's preference for '{attribute}' in its purchases?
+
+History Interpretation Guide:
+- The history shows outcomes like "Outcome: User established preference for [key=value]".
+- If the key indicates a negative (e.g., "dislikes", "avoid", "returned", "hates"), then the value is FORBIDDEN.
+- Otherwise, the value is REQUIRED (or a synonym).
+
+Examples:
+- [fit=slim fit] -> Item MUST be slim fit.
+- [dislikes=polyester] -> Item MUST NOT be polyester.
+
+Reply YES if the purchases respect the preference.
+Reply NO if the purchases violate or ignore the preference.
+Only reply YES or NO."""
+
+        try:
+            messages = [{"role": "user", "content": prompt}]
+            response = self._llm_client.complete(messages, max_tokens=1024)
+            # Check if response starts with YES (robust to explanations like "polyester")
+            clean_response = response.strip().lower()
+            if clean_response.startswith("yes"):
+                return 1.0, "LLM confirmed preference recall"
+            return 0.0, "LLM rejected preference match"
+        except Exception as e:
+            logger.error("LLM preference check failed", error=str(e))
+            return 0.0, f"Evaluation error: {str(e)}"
 
     def _check_preference_consistency(
         self,

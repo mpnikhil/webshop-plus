@@ -11,10 +11,9 @@ image = "ghcr.io/mpnikhil/webshop-plus-purple:latest"
 env = { OPENAI_API_KEY = "${OPENAI_API_KEY}", OPENAI_API_BASE = "https://api.tokenfactory.nebius.com/v1/", LLM_MODEL = "openai/Qwen/Qwen3-32B" }
 
 [config]
-# Full assessment: 65 tasks (excluding preference_memory)
-# Distribution: 20 budget_constrained, 20 negative_constraint, 15 comparative_reasoning, 10 error_recovery
-num_tasks = 65
-task_types = ["budget_constrained", "negative_constraint", "comparative_reasoning", "error_recovery"]
+# Full assessment: 80 tasks
+# Distribution: 20 budget_constrained, 20 negative_constraint, 15 comparative_reasoning, 10 error_recovery, 15 preference_memory
+num_tasks = 80
+task_types = ["budget_constrained", "negative_constraint", "comparative_reasoning", "error_recovery", "preference_memory"]
 timeout_per_task = 300
 max_steps_per_task = 50
-include_memory_tasks = false

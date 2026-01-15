@@ -417,6 +417,7 @@ class TestBuildKickoff:
             goal="Find running shoes under $50",
             budget=50.0,
             constraints=["waterproof", "size 10"],
+            user_history=None,
             mcp_uri=None,
         )
 
@@ -433,6 +434,7 @@ class TestBuildKickoff:
             goal="Buy shoes",
             budget=100.0,
             constraints=[],
+            user_history=None,
             mcp_uri="http://localhost:8000/mcp/session-123",
         )
 

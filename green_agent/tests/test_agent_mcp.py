@@ -171,7 +171,7 @@ class TestExtractTaskKickoffData:
     def test_budget_task_extraction(self, mcp_agent_config, budget_task):
         """Extract goal, budget, constraints from budget task."""
         agent = WebShopPlusAgent(config=mcp_agent_config)
-        goal, budget, constraints = agent._extract_task_kickoff_data(budget_task)
+        goal, budget, constraints, _ = agent._extract_task_kickoff_data(budget_task)
 
         assert goal == "Find running shoes under $50"
         assert budget == 50.0
@@ -184,7 +184,7 @@ class TestExtractTaskKickoffData:
     ):
         """Extract data from negative constraint task."""
         agent = WebShopPlusAgent(config=mcp_agent_config)
-        goal, budget, constraints = agent._extract_task_kickoff_data(
+        goal, budget, constraints, _ = agent._extract_task_kickoff_data(
             negative_constraint_task
         )
 
@@ -206,7 +206,7 @@ class TestExtractTaskKickoffData:
                 required_items=[],
             ),
         )
-        _, budget, _ = agent._extract_task_kickoff_data(task)
+        _, budget, _, _ = agent._extract_task_kickoff_data(task)
         assert budget == 75.0
 
         # Test with negative constraint task without budget (uses default)
@@ -218,7 +218,7 @@ class TestExtractTaskKickoffData:
                 budget=None,  # No budget specified
             ),
         )
-        _, budget2, _ = agent._extract_task_kickoff_data(task2)
+        _, budget2, _, _ = agent._extract_task_kickoff_data(task2)
         assert budget2 == 100.0  # Default budget
 
 

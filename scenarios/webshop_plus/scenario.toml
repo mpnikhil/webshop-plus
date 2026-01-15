@@ -100,9 +100,9 @@ quality_weight = 0.3
 
 # Assessment presets
 [presets.quick]
-description = "Quick test with 3 tasks"
-num_tasks = 3
-task_types = ["budget_constrained", "negative_constraint", "error_recovery"]
+description = "Quick test with 4 tasks"
+num_tasks = 4
+task_types = ["budget_constrained", "negative_constraint", "error_recovery", "preference_memory"]
 timeout_per_task = 180
 
 [presets.standard]

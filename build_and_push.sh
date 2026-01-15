@@ -32,41 +32,43 @@ done
 
 echo "==> Building WebShop+ images (version: $VERSION)"
 
+# Determine platform
+PLATFORM="linux/amd64"
+if [ "$PUSH" = false ]; then
+  # Use host architecture for local builds to avoid slow emulation
+  PLATFORM=$(docker info --format '{{.OSType}}/{{.Architecture}}')
+  echo "==> Local build detected, using native platform: $PLATFORM"
+else
+  echo "==> Push detected, forcing platform: $PLATFORM"
+fi
+
 # Build green agent
 echo "==> Building green agent..."
-docker build -t ghcr.io/mpnikhil/webshop-plus-green:$VERSION \
-  -f green_agent/Dockerfile .
+TAGS="-t ghcr.io/mpnikhil/webshop-plus-green:$VERSION"
+if [ "$VERSION" != "latest" ]; then
+  TAGS="$TAGS -t ghcr.io/mpnikhil/webshop-plus-green:latest"
+fi
+
+if [ "$PUSH" = true ]; then
+  docker buildx build --platform $PLATFORM $TAGS -f green_agent/Dockerfile --push .
+else
+  docker buildx build --platform $PLATFORM $TAGS -f green_agent/Dockerfile --load .
+fi
 
 # Build purple agent
 echo "==> Building purple agent..."
-docker build -t ghcr.io/mpnikhil/webshop-plus-purple:$VERSION \
-  -f purple_agent/Dockerfile .
-
-# Tag as latest if building a version
+TAGS="-t ghcr.io/mpnikhil/webshop-plus-purple:$VERSION"
 if [ "$VERSION" != "latest" ]; then
-  echo "==> Tagging as latest..."
-  docker tag ghcr.io/mpnikhil/webshop-plus-green:$VERSION \
-    ghcr.io/mpnikhil/webshop-plus-green:latest
-  docker tag ghcr.io/mpnikhil/webshop-plus-purple:$VERSION \
-    ghcr.io/mpnikhil/webshop-plus-purple:latest
+  TAGS="$TAGS -t ghcr.io/mpnikhil/webshop-plus-purple:latest"
 fi
 
-echo "==> Build complete!"
-
-# Push if requested
 if [ "$PUSH" = true ]; then
-  echo "==> Pushing to ghcr.io..."
-
-  docker push ghcr.io/mpnikhil/webshop-plus-green:$VERSION
-  docker push ghcr.io/mpnikhil/webshop-plus-purple:$VERSION
-
-  if [ "$VERSION" != "latest" ]; then
-    docker push ghcr.io/mpnikhil/webshop-plus-green:latest
-    docker push ghcr.io/mpnikhil/webshop-plus-purple:latest
-  fi
-
-  echo "==> Push complete!"
+  docker buildx build --platform $PLATFORM $TAGS -f purple_agent/Dockerfile --push .
+else
+  docker buildx build --platform $PLATFORM $TAGS -f purple_agent/Dockerfile --load .
 fi
+
+echo "==> Build and push complete!"
 
 echo ""
 echo "Images built:"

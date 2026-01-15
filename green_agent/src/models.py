@@ -192,6 +192,7 @@ class PreferenceMemoryTask(BaseTask):
 
     task_type: Literal[TaskType.PREFERENCE_MEMORY] = TaskType.PREFERENCE_MEMORY
     session_sequence: list[SessionSequenceItem] = Field(default_factory=list)
+    user_history_text: str = ""
     memory_test: MemoryTest
     evaluation_criteria: MemoryEvaluationCriteria = Field(
         default_factory=MemoryEvaluationCriteria

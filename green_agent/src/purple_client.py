@@ -178,6 +178,7 @@ class PurpleAgentClient:
         goal: str,
         budget: float,
         constraints: Optional[list[str]] = None,
+        user_history: Optional[str] = None,
         mcp_uri: Optional[str] = None,
         metadata: Optional[dict[str, Any]] = None,
     ) -> TaskResult:
@@ -190,6 +191,7 @@ class PurpleAgentClient:
             goal: The shopping task goal.
             budget: Maximum allowed spending.
             constraints: Optional list of constraints.
+            user_history: Optional user history string.
             mcp_uri: Optional MCP server URI for tool execution.
             metadata: Optional additional metadata.
 
@@ -204,7 +206,7 @@ class PurpleAgentClient:
             raise ConnectionError("Not connected. Call connect() first.")
 
         # Build kickoff payload
-        kickoff = self._build_kickoff(goal, budget, constraints or [], mcp_uri)
+        kickoff = self._build_kickoff(goal, budget, constraints or [], user_history, mcp_uri)
 
         # Create message with kickoff as JSON text
         message = create_text_message_object(
@@ -219,6 +221,7 @@ class PurpleAgentClient:
             "Sending task to purple agent",
             goal=goal[:50],
             budget=budget,
+            has_history=user_history is not None,
             has_mcp=mcp_uri is not None,
         )
 
@@ -337,6 +340,7 @@ class PurpleAgentClient:
         goal: str,
         budget: float,
         constraints: list[str],
+        user_history: Optional[str],
         mcp_uri: Optional[str],
     ) -> dict[str, Any]:
         """Build a kickoff message payload.
@@ -345,6 +349,7 @@ class PurpleAgentClient:
             goal: The shopping task goal.
             budget: Maximum allowed spending.
             constraints: List of constraints.
+            user_history: Optional user history string.
             mcp_uri: Optional MCP server URI.
 
         Returns:
@@ -355,6 +360,9 @@ class PurpleAgentClient:
             "budget": budget,
             "constraints": constraints,
         }
+
+        if user_history:
+            kickoff["user_history"] = user_history
 
         if mcp_uri:
             kickoff["resources"] = [

@@ -147,6 +147,7 @@ class ShoppingAgent:
                 - goal: str - The shopping task goal
                 - budget: float - Maximum spending allowed
                 - constraints: list[str] - List of constraints
+                - user_history: str (optional) - User history string
                 - max_turns: int (optional) - Maximum turns for this task (defaults to instance default)
 
         Returns:
@@ -168,6 +169,7 @@ class ShoppingAgent:
 
         budget = task_data.get("budget", 100.0)
         constraints = task_data.get("constraints", [])
+        user_history = task_data.get("user_history", "")
         session_id = task_data.get("session_id", str(uuid.uuid4()))
         max_turns = task_data.get("max_turns", self._max_turns)
 
@@ -179,6 +181,7 @@ class ShoppingAgent:
             goal=goal,
             budget=budget,
             constraints=constraints,
+            has_history=bool(user_history),
             session_id=session_id,
         )
         print(f"[DEBUG] After logger.info")
@@ -186,7 +189,7 @@ class ShoppingAgent:
         try:
             print(f"[DEBUG] In try block")
             # Format the instruction with task details
-            instruction = self._format_instruction(goal, budget, constraints)
+            instruction = self._format_instruction(goal, budget, constraints, user_history)
             print(f"[DEBUG] Instruction formatted")
 
             logger.info("Creating MCP toolset", mcp_uri=mcp_uri)
@@ -289,23 +292,33 @@ class ShoppingAgent:
             logger.info("ShoppingAgent.run() exiting (cleanup phase)")
 
     def _format_instruction(
-        self, goal: str, budget: float, constraints: list[str]
+        self, goal: str, budget: float, constraints: list[str], user_history: str
     ) -> str:
         """Format the agent instruction with task details.
 
         Args:
             goal: The shopping task goal.
             budget: Maximum spending allowed.
-            constraints: List of constraints (not used in simplified template).
+            constraints: List of constraints.
+            user_history: User history string.
 
         Returns:
             Formatted instruction string.
         """
-        # Note: Constraints are accepted for API compatibility but not used
-        # in the simplified instruction template
+        # Format constraints as a bulleted list
+        if constraints:
+            constraints_str = "\n".join(f"- {c}" for c in constraints)
+        else:
+            constraints_str = "(None)"
+
+        # Format history
+        history_str = user_history if user_history else "(None)"
+
         return SHOPPING_INSTRUCTION.format(
             goal=goal,
             budget=budget,
+            constraints=constraints_str,
+            user_history=history_str,
         )
 
     async def _execute_runner(

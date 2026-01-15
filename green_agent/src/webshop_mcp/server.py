@@ -484,15 +484,33 @@ def _show_product_page(
     # Truncate name for compact response
     short_name = product.get("name", "Unknown")[:50]
 
-    # Get product attributes for purple agent to see
+    # Prepare detailed product data for fairness (agent needs same data as evaluator)
     attributes = product_info.get("Attributes", []) if product_info else []
+    catalog_attributes: dict[str, Any] = {}
+    description = ""
+    category = ""
 
-    # Keep response compact for LLM context window
+    if product_info:
+        category = product_info.get("category", "")
+
+        if isinstance(product_info.get("attributes"), dict):
+            catalog_attributes.update(product_info["attributes"])
+
+        if isinstance(attributes, list):
+            catalog_attributes["attributes_list"] = attributes
+
+        if isinstance(product_info.get("description"), str):
+            description = product_info["description"][:400]
+
+    # Keep response compact for LLM context window, but enriched with details
     response = {
         "page": state.current_page,
         "product": short_name,
         "price": product.get("price", 0.0),
         "attributes": attributes,
+        "category": category,
+        "catalog_attributes": catalog_attributes,
+        "description": description,
         "options": options,
         "selected_options": selected_display,
         "actions": ["add_to_cart", "back_to_results"],
@@ -1120,6 +1138,8 @@ def view_cart() -> dict[str, Any]:
             "name": item.get("name", "Unknown"),
             "price": item.get("price", 0.0),
             "options": item.get("options", {}),
+            "product_id": item.get("product_id", ""),
+            "catalog_attributes": item.get("catalog_attributes", {}),
         })
 
     total = state.get_cart_total()
