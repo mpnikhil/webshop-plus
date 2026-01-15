@@ -297,10 +297,12 @@ WebShop+ uses A2A for orchestration and MCP for tool execution. The green agent 
 
 **Key Fields:**
 - `message.parts[0].text`: Task description including goal, budget, and constraints
-- `message.resources[0].uri`: MCP server endpoint (session-scoped)
-- `message.resources[0].type`: Always `"mcp_server"` for tool execution
+- `message.resources[0].uri`: **CRITICAL:** This is the MCP server endpoint (session-scoped). The Purple Agent **must** connect to this URI to execute tools (`search`, `click`, `checkout`).
+- `message.resources[0].type`: Always `"mcp_server"` for tool execution.
 
 **Message from Purple to Green (Completion):**
+
+The Purple Agent should send a completion message when it is done with the task (usually after calling the `checkout` tool or deciding to stop). This message aids in evaluation but the primary evaluation data comes from the MCP tool traces.
 
 ```json
 {
@@ -312,13 +314,15 @@ WebShop+ uses A2A for orchestration and MCP for tool execution. The green agent 
       "parts": [
         {
           "kind": "text",
-          "text": "Task completed. Final cart: {cart_summary}"
+          "text": "Task completed. Final cart summary: {cart_summary}. Reasoning: {reasoning_for_decisions}"
         }
       ]
     }
   }
 }
 ```
+
+*   **`text`**: Should include a summary of what was purchased and the reasoning behind decisions. The Green Agent's "LLM-as-a-Judge" uses this reasoning to evaluate the "Comparative Reasoning" dimension.
 
 ### Starting an Assessment
 
