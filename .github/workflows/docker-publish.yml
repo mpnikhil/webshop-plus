@@ -26,6 +26,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download WebShop data
+        run: |
+          mkdir -p webshop/data
+          # Download items_shuffle_1000.json
+          curl -L "https://drive.google.com/uc?export=download&id=1EgHdxQ_YxqIQlvvq5iKlCrkEKR6-j0Ib" -o webshop/data/items_shuffle_1000.json
+          # Download items_ins_v2_1000.json
+          curl -L "https://drive.google.com/uc?export=download&id=1IduG0xl544V_A_jv3tHXC0kyFi7PnyBu" -o webshop/data/items_ins_v2_1000.json
+          # Download items_human_ins.json
+          curl -L "https://drive.google.com/uc?export=download&id=14Kb5SPBk_jfdLZ_CDBNitW98QLDlKR5O" -o webshop/data/items_human_ins.json
+          ls -l webshop/data/
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
