@@ -1,3 +1,6 @@
 [submodule "webshop"]
 	path = webshop
 	url = https://github.com/princeton-nlp/WebShop.git
+[submodule "a2a-tck"]
+	path = a2a-tck
+	url = https://github.com/a2aproject/a2a-tck.git
