@@ -58,8 +58,8 @@ class LLMClient:
         model: Optional[str] = None,
         api_key: Optional[str] = None,
         api_base: Optional[str] = None,
-        temperature: float = 0.7,
-        max_tokens: int = 2048,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
         timeout: float = 120.0,
     ) -> None:
         """
@@ -70,16 +70,19 @@ class LLMClient:
                    Defaults to LLM_MODEL env var or "openai/qwen3-coder-30b-a3b-instruct-mlx".
             api_key: API key for cloud providers. Defaults to LLM_API_KEY env var.
             api_base: Custom API base URL. Usually auto-detected from model prefix.
-            temperature: Sampling temperature (0.0-1.0). Default 0.7.
-            max_tokens: Maximum tokens to generate. Default 2048.
+            temperature: Sampling temperature (0.0-1.0). Default from LLM_TEMPERATURE env var or 0.7.
+            max_tokens: Maximum tokens to generate. Default from LLM_MAX_TOKENS env var or 2048.
             timeout: Request timeout in seconds. Default 120.
         """
+        env_temp = os.getenv("LLM_TEMPERATURE")
+        env_tokens = os.getenv("LLM_MAX_TOKENS")
+
         self.config = LLMConfig(
             model=model or os.getenv("LLM_MODEL", "openai/qwen3-coder-30b-a3b-instruct-mlx"),
             api_key=api_key or os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY"),
             api_base=api_base or os.getenv("LLM_API_BASE") or os.getenv("OPENAI_API_BASE"),
-            temperature=temperature,
-            max_tokens=max_tokens,
+            temperature=temperature if temperature is not None else (float(env_temp) if env_temp else 0.7),
+            max_tokens=max_tokens if max_tokens is not None else (int(env_tokens) if env_tokens else 2048),
             timeout=timeout,
         )
 
@@ -103,7 +106,7 @@ class LLMClient:
         kwargs = {
             "model": self.config.model,
             "messages": messages,
-            "temperature": temperature if temperature is not None else 0.6,
+            "temperature": temperature if temperature is not None else self.config.temperature,
             "top_p": 0.95,
             "max_tokens": max_tokens if max_tokens is not None else self.config.max_tokens,
             "timeout": self.config.timeout,
@@ -133,6 +136,7 @@ class LLMClient:
         messages: list[dict],
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
+        thinking: bool = True,
     ) -> str:
         """
         Generate a completion from the LLM.
@@ -142,6 +146,7 @@ class LLMClient:
                       Roles: "system", "user", "assistant".
             temperature: Override default temperature.
             max_tokens: Override default max tokens.
+            thinking: Whether to append /think to prompt to trigger CoT.
 
         Returns:
             The generated text content.
@@ -157,8 +162,10 @@ class LLMClient:
             >>> print(response)  # "4"
         """
         # 1) add /think at the end of ur prompt to enable thinking
-        if messages and messages[-1].get("role") == "user":
-            messages[-1]["content"] += "\n\n/think"
+        if thinking and messages and messages[-1].get("role") == "user":
+            # Avoid appending if already present
+            if not messages[-1]["content"].endswith("/think"):
+                messages[-1]["content"] += "\n\n/think"
 
         kwargs = self._get_completion_kwargs(messages, temperature, max_tokens)
         response = litellm.completion(**kwargs)

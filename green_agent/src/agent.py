@@ -185,7 +185,7 @@ class WebShopPlusAgent:
         config = config or AssessmentConfig()
         assessment_id = str(uuid.uuid4())
 
-        logger.info(
+        logger.debug(
             "Starting assessment",
             assessment_id=assessment_id,
             participants=participants,
@@ -210,7 +210,7 @@ class WebShopPlusAgent:
         tasks = self._select_tasks(config)
         total_tasks = len(tasks)
 
-        logger.info(
+        logger.debug(
             "Selected tasks for assessment",
             total_tasks=total_tasks,
             task_types=[t.task_type.value for t in tasks[:5]],  # Log first 5

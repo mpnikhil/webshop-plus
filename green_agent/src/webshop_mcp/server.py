@@ -65,7 +65,7 @@ def register_session(
     if webshop is not None:
         _webshop_interfaces[session_id] = webshop
     _completion_events[session_id] = asyncio.Event()
-    logger.info("Session registered", session_id=session_id)
+    logger.debug("Session registered", session_id=session_id)
 
 
 def unregister_session(session_id: str) -> None:
@@ -78,7 +78,7 @@ def unregister_session(session_id: str) -> None:
     _webshop_interfaces.pop(session_id, None)
     _completion_events.pop(session_id, None)
     _final_results.pop(session_id, None)
-    logger.info("Session unregistered", session_id=session_id)
+    logger.debug("Session unregistered", session_id=session_id)
 
 
 def get_session_state(session_id: str) -> SessionState | None:
@@ -204,7 +204,7 @@ mcp = FastMCP(
 )
 
 # Add logging for MCP server initialization
-logger.info("FastMCP server created", transport_security_enabled=transport_security.enable_dns_rebinding_protection)
+logger.debug("FastMCP server created", transport_security_enabled=transport_security.enable_dns_rebinding_protection)
 
 
 # =============================================================================
@@ -779,13 +779,18 @@ def search(query: str) -> dict[str, Any]:
         query: Search terms (e.g., "running shoes", "blue cotton shirt")
 
     Returns:
-        Structured results with clickable element IDs:
-        - page: Current page type ("search_results")
-        - query: The search query used
-        - products: List of products with id, name, price
-        - actions: Available navigation actions
+        Structured results with clickable element IDs. Response fields:
+        - page: "search_results"
+        - products: List of products with {id, name, price}
+        - available_actions: Navigation actions (e.g., next_page, prev_page)
+        - next_action: Suggested next action string
         - turn: Current turn number
-        - budget: Remaining budget info
+        - turns_remaining: Remaining turns before terminal response
+        - budget: Budget constraint
+        - cart_total: Current cart total
+
+        Notes:
+        - Results are truncated to the first 5 products for context size.
     """
     logger.info("search() tool called", query=query)
 
@@ -795,7 +800,7 @@ def search(query: str) -> dict[str, Any]:
         logger.exception("Failed to get current state", error=str(e), query=query)
         raise
 
-    logger.info("Got session state", session_id=state.session_id)
+    logger.debug("Got session state", session_id=state.session_id)
 
     # Check turn limit first
     if state.increment_turn():
@@ -810,11 +815,11 @@ def search(query: str) -> dict[str, Any]:
 
     # Execute search via WebShop
     try:
-        logger.info("About to call _get_webshop", session_id=state.session_id)
+        logger.debug("About to call _get_webshop", session_id=state.session_id)
         webshop = _get_webshop(state.session_id)
-        logger.info("Got WebShop interface, calling step()")
+        logger.debug("Got WebShop interface, calling step()")
         result = webshop.step(f"search[{query}]")
-        logger.info("WebShop step() completed", observation_len=len(result.observation) if hasattr(result, 'observation') else 0)
+        logger.debug("WebShop step() completed", observation_len=len(result.observation) if hasattr(result, 'observation') else 0)
     except Exception as e:
         logger.exception("Error during WebShop search", error=str(e), query=query, session_id=state.session_id)
         raise
@@ -916,8 +921,12 @@ def click(element_id: str) -> dict[str, Any]:
         element_id: ID from previous observation (e.g., "p1", "size_10")
 
     Returns:
-        New page state with available element IDs, or error dict
-        if element not found.
+        New page state with available element IDs, or error dict if element not found.
+        The response shape varies by element type:
+        - product: product detail page with options and actions
+        - option: selection confirmation
+        - add_to_cart: cart update confirmation
+        - navigation: search results page or back navigation state
     """
     state = get_current_state()
 
@@ -984,7 +993,14 @@ def add_to_cart() -> dict[str, Any]:
     This is equivalent to click("add_to_cart").
 
     Returns:
-        Cart update confirmation or error if not on product page.
+        Cart update confirmation or error if not on product page. Response fields:
+        - page: Current page type
+        - status: "added_to_cart"
+        - cart_total: Updated cart total
+        - budget: Budget constraint
+        - hint: Suggested next action
+        - turn: Current turn number
+        - turns_remaining: Remaining turns before terminal response
     """
     state = get_current_state()
 
@@ -1114,9 +1130,6 @@ def view_cart() -> dict[str, Any]:
     Returns:
         - items: List of cart items with index, name, price, options
         - cart_total: Total price of all items
-        - budget: Budget constraint
-        - budget_remaining: How much budget is left
-        - turn: Current turn number
     """
     state = get_current_state()
 
@@ -1167,10 +1180,10 @@ def remove_from_cart(item_index: int) -> dict[str, Any]:
         item_index: Index of item to remove (0-based, from view_cart)
 
     Returns:
-        - removed: Name of removed item
-        - cart_total: Updated total
-        - cart_size: Number of items remaining
-        - error: Only present if removal failed
+        - removed: Name of removed item (if successful)
+        - cart_total: Updated total (if successful)
+        - cart_size: Number of items remaining (always)
+        - error: Present if removal failed
     """
     state = get_current_state()
 

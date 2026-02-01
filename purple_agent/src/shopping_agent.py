@@ -68,6 +68,10 @@ MCP_TIMEOUT = 30.0
 # SSE read timeout for long-running tool calls
 MCP_SSE_READ_TIMEOUT = 120.0
 
+# LLM parameters from environment
+LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0.2"))
+LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "8192"))
+
 
 # =============================================================================
 # Instruction Template
@@ -77,12 +81,18 @@ SHOPPING_INSTRUCTION = """You are a shopping assistant.
 
 TASK: {goal}
 BUDGET: ${budget}
+CONSTRAINTS:
+{constraints}
+
+USER HISTORY:
+{user_history}
 
 GUIDELINES:
 - If fixing cart errors: check cart first, remove wrong items, then add correct ones
 - Pick the best available product within budget - don't over-search
+- You MUST call the 'checkout' tool to finalize your purchase once you have the correct items in your cart.
 
-After checkout, respond with JSON:
+IMPORTANT: Respond with the final JSON ONLY AFTER you have successfully called the 'checkout' tool.
 {{"reasoning": "why you chose this product", "summary": "brief completion message"}}
 
 Start now:"""
@@ -120,6 +130,8 @@ class ShoppingAgent:
         """
         self._model = model or DEFAULT_MODEL
         self._max_turns = max_turns
+        self._temperature = LLM_TEMPERATURE
+        self._max_tokens = LLM_MAX_TOKENS
         self._session_service = InMemorySessionService()
 
         # Set API configuration based on model provider
@@ -131,10 +143,12 @@ class ShoppingAgent:
         else:
             api_base = None
 
-        logger.info(
+        logger.debug(
             "ShoppingAgent initialized",
             model=self._model,
             max_turns=self._max_turns,
+            temperature=self._temperature,
+            max_tokens=self._max_tokens,
             api_base=api_base,
         )
 
@@ -173,8 +187,6 @@ class ShoppingAgent:
         session_id = task_data.get("session_id", str(uuid.uuid4()))
         max_turns = task_data.get("max_turns", self._max_turns)
 
-        print(f"[DEBUG] ShoppingAgent.run() called with MCP URI: {mcp_uri}")
-        print(f"[DEBUG] Goal: {goal}, Budget: {budget}")
         logger.info(
             "ShoppingAgent.run() starting",
             mcp_uri=mcp_uri,
@@ -184,16 +196,12 @@ class ShoppingAgent:
             has_history=bool(user_history),
             session_id=session_id,
         )
-        print(f"[DEBUG] After logger.info")
 
         try:
-            print(f"[DEBUG] In try block")
             # Format the instruction with task details
             instruction = self._format_instruction(goal, budget, constraints, user_history)
-            print(f"[DEBUG] Instruction formatted")
 
-            logger.info("Creating MCP toolset", mcp_uri=mcp_uri)
-            print(f"[DEBUG] About to create McpToolset")
+            logger.debug("Creating MCP toolset", mcp_uri=mcp_uri)
 
             # Create MCP toolset connection
             try:
@@ -204,26 +212,29 @@ class ShoppingAgent:
                         sse_read_timeout=MCP_SSE_READ_TIMEOUT,
                     )
                 )
-                print(f"[DEBUG] McpToolset created")
             except Exception as e:
-                print(f"[DEBUG] McpToolset creation failed: {e}")
                 raise
-
-            logger.info("MCP toolset created successfully")
+            
+            logger.debug("MCP toolset created successfully")
 
             # Create the ADK agent with LiteLLM wrapper
             # This allows using LM Studio instead of Gemini
-            logger.info("Creating LiteLLM model", model=self._model)
-            print(f"[DEBUG] Creating LiteLlm model: {self._model}")
+            logger.debug(
+                "Creating LiteLLM model", 
+                model=self._model, 
+                temperature=self._temperature,
+                max_tokens=self._max_tokens
+            )
             try:
-                llm_model = LiteLlm(model=self._model)
-                print(f"[DEBUG] LiteLlm model created")
+                llm_model = LiteLlm(
+                    model=self._model,
+                    temperature=self._temperature,
+                    max_tokens=self._max_tokens,
+                )
             except Exception as e:
-                print(f"[DEBUG] LiteLlm creation failed: {e}")
                 raise
 
-            logger.info("Creating ADK Agent with MCP toolset")
-            print(f"[DEBUG] Creating ADK Agent")
+            logger.debug("Creating ADK Agent with MCP toolset")
             try:
                 agent = Agent(
                     name="shopping_assistant",
@@ -231,16 +242,13 @@ class ShoppingAgent:
                     instruction=instruction,
                     tools=[mcp_toolset],
                 )
-                print(f"[DEBUG] ADK Agent created")
             except Exception as e:
-                print(f"[DEBUG] Agent creation failed: {e}")
                 raise
 
             # Create runner with session service
             # Note: app_name must be "agents" to match ADK's internal module structure
             # when using LiteLlm wrapper (Agent loaded from google.adk.agents)
-            logger.info("Creating ADK Runner")
-            print(f"[DEBUG] Creating ADK Runner")
+            logger.debug("Creating ADK Runner")
             app_name = "agents"
             try:
                 runner = Runner(
@@ -248,36 +256,29 @@ class ShoppingAgent:
                     agent=agent,
                     session_service=self._session_service,
                 )
-                print(f"[DEBUG] ADK Runner created")
             except Exception as e:
-                print(f"[DEBUG] Runner creation failed: {e}")
                 raise
-            logger.info("ADK Runner created successfully")
+            logger.debug("ADK Runner created successfully")
 
             # Create session BEFORE running (required by ADK's InMemorySessionService)
-            print(f"[DEBUG] Creating ADK session: {session_id}")
             try:
                 await self._session_service.create_session(
                     app_name=app_name,
                     user_id="assessment",
                     session_id=session_id,
                 )
-                print(f"[DEBUG] ADK session created")
             except Exception as e:
-                print(f"[DEBUG] Session creation failed: {e}")
                 raise
 
             # Run the agent
-            print(f"[DEBUG] Calling _execute_runner")
             result = await self._execute_runner(
                 runner=runner,
                 session_id=session_id,
                 goal=goal,
                 max_turns=max_turns,
             )
-            print(f"[DEBUG] _execute_runner returned: {result}")
             logger.info("ShoppingAgent.run() completed", result=result)
-            logger.info("Returning result to executor")
+            logger.debug("Returning result to executor")
             return result
 
         except Exception as e:
@@ -289,7 +290,7 @@ class ShoppingAgent:
                 "error": str(e),
             }
         finally:
-            logger.info("ShoppingAgent.run() exiting (cleanup phase)")
+            logger.debug("ShoppingAgent.run() exiting (cleanup phase)")
 
     def _format_instruction(
         self, goal: str, budget: float, constraints: list[str], user_history: str
@@ -339,13 +340,11 @@ class ShoppingAgent:
         Returns:
             Result dict with success, final_message, turns_used, reasoning_trace.
         """
-        print(f"[DEBUG] _execute_runner called with goal: {goal[:50]}")
         # Create initial message content
         initial_message = Content(
             parts=[Part(text=f"Please complete this shopping task: {goal}")],
             role="user",
         )
-        print(f"[DEBUG] Initial message created")
 
         final_message = ""
         turns_used = 0
@@ -355,8 +354,7 @@ class ShoppingAgent:
         # ADK handles the entire ReAct loop automatically - we just collect events
         # Use RunConfig to limit LLM calls (this is the proper way to limit turns in ADK)
         run_config = RunConfig(max_llm_calls=max_turns)
-        logger.info("Starting runner.run_async()", session_id=session_id, max_llm_calls=max_turns)
-        print(f"[DEBUG] About to start runner.run_async() with max_llm_calls={max_turns}")
+        logger.debug("Starting runner.run_async()", session_id=session_id, max_llm_calls=max_turns)
         async for event in runner.run_async(
             user_id="assessment",
             session_id=session_id,
@@ -369,7 +367,7 @@ class ShoppingAgent:
             function_calls = event.get_function_calls()
             function_responses = event.get_function_responses()
 
-            logger.info(
+            logger.debug(
                 "Event received",
                 turn=turns_used,
                 has_function_calls=bool(function_calls),
@@ -428,7 +426,7 @@ class ShoppingAgent:
             "reasoning_summary": reasoning_summary,
         }
 
-        logger.info(
+        logger.debug(
             "Event loop completed",
             success=success,
             turns_used=turns_used,

@@ -3,12 +3,12 @@
 
 [green_agent]
 image = "ghcr.io/mpnikhil/webshop-plus-green:latest"
-env = { OPENAI_API_KEY = "${OPENAI_API_KEY}", OPENAI_API_BASE = "https://api.tokenfactory.nebius.com/v1/", LLM_MODEL = "openai/Qwen/Qwen3-32B" }
+env = { OPENAI_API_KEY = "${OPENAI_API_KEY}", OPENAI_API_BASE = "https://api.tokenfactory.nebius.com/v1/", LLM_MODEL = "openai/Qwen/Qwen3-32B", LLM_TEMPERATURE = "0.2", LLM_MAX_TOKENS = "8192" }
 
 [[participants]]
 name = "shopper"
 image = "ghcr.io/mpnikhil/webshop-plus-purple:latest"
-env = { OPENAI_API_KEY = "${OPENAI_API_KEY}", OPENAI_API_BASE = "https://api.tokenfactory.nebius.com/v1/", LLM_MODEL = "openai/Qwen/Qwen3-32B" }
+env = { OPENAI_API_KEY = "${OPENAI_API_KEY}", OPENAI_API_BASE = "https://api.tokenfactory.nebius.com/v1/", LLM_MODEL = "openai/Qwen/Qwen3-32B", LLM_TEMPERATURE = "0.2", LLM_MAX_TOKENS = "8192" }
 
 [config]
 # Full assessment: 80 tasks
