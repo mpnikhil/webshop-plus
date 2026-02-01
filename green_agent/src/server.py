@@ -134,7 +134,7 @@ class MCPRouteHandler:
             # Also reset root_path since we're handling the full path ourselves
             modified_scope["root_path"] = ""
 
-            logger.info(
+            logger.debug(
                 "Routing MCP request",
                 session_id=session_id,
                 original_path=path,
@@ -484,18 +484,18 @@ def create_app(
     # Create lifespan context manager that runs the MCP session manager
     @asynccontextmanager
     async def lifespan(app):
-        logger.info(
+        logger.debug(
             "Starting WebShop+ A2A server (SDK)",
             card_url=card_url,
             mcp_base=f"http://{mcp_host}:{port}/mcp",
         )
         # Run the MCP session manager - this is REQUIRED for FastMCP to work
         async with mcp.session_manager.run():
-            logger.info("MCP session manager started")
+            logger.debug("MCP session manager started")
             # Log FastMCP app routes for debugging
             if hasattr(mcp_app, "routes"):
                 for route in mcp_app.routes:
-                    logger.info(
+                    logger.debug(
                         "FastMCP route registered",
                         path=getattr(route, "path", "unknown"),
                         methods=getattr(route, "methods", "any"),
@@ -616,6 +616,7 @@ def main() -> None:
         host=args.host,
         port=args.port,
         log_level=args.log_level.lower(),
+        access_log=False,
     )
 
 

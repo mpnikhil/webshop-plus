@@ -243,6 +243,7 @@ def main() -> None:
         host=args.host,
         port=args.port,
         log_level=args.log_level.lower(),
+        access_log=False,
     )
 
 

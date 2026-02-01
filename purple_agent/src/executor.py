@@ -104,7 +104,7 @@ class Executor(AgentExecutor):
         task_id = context.task_id
         context_id = context.context_id
 
-        logger.info(
+        logger.debug(
             "Executor.execute() called",
             task_id=task_id,
             context_id=context_id,
@@ -310,7 +310,7 @@ class Executor(AgentExecutor):
         # Add session ID for tracking
         task_data["session_id"] = task_id
 
-        logger.info(
+        logger.debug(
             "Extracted task data for MCP shopping",
             goal=task_data.get("goal"),
             budget=task_data.get("budget"),
@@ -333,6 +333,7 @@ class Executor(AgentExecutor):
                 "ShoppingAgent completed",
                 success=result.get("success"),
                 turns_used=result.get("turns_used"),
+                reasoning=result.get("reasoning_summary", "")[:200] + "..." if len(result.get("reasoning_summary", "")) > 200 else result.get("reasoning_summary", ""),
             )
 
         except Exception as e:

@@ -833,15 +833,25 @@ Examples:
 
 Reply YES if the purchases respect the preference.
 Reply NO if the purchases violate or ignore the preference.
-Only reply YES or NO."""
+Only reply YES or NO.
+"""
 
         try:
             messages = [{"role": "user", "content": prompt}]
-            response = self._llm_client.complete(messages, max_tokens=1024)
-            # Check if response starts with YES (robust to explanations like "polyester")
+            # Enable thinking to encourage reasoning, allowing tokens for it
+            response = self._llm_client.complete(messages, max_tokens=1024, thinking=True)
+            
             clean_response = response.strip().lower()
+            
+            # Check if response starts with YES (simple case)
             if clean_response.startswith("yes"):
                 return 1.0, "LLM confirmed preference recall"
+                
+            # Check if response ends with YES (CoT case)
+            # Allow for boundary, colon, asterisk before YES, and punctuation after
+            if re.search(r"(\b|:|\*)yes\W*$", clean_response):
+                return 1.0, "LLM confirmed preference recall"
+
             return 0.0, "LLM rejected preference match"
         except Exception as e:
             logger.error("LLM preference check failed", error=str(e))
@@ -876,7 +886,7 @@ Only reply YES or NO."""
             messages = [{"role": "user", "content": prompt}]
             logger.debug("LLM positive match prompt", prompt=prompt)
             response = self._llm_client.complete(messages, max_tokens=1024)
-            logger.info("LLM positive match response", response=response)
+            logger.debug("LLM positive match response", response=response)
             return "yes" in response.lower()
         except Exception as e:
             logger.error("LLM positive match failed", error=str(e))
@@ -932,7 +942,7 @@ Only reply YES or NO."""
             messages = [{"role": "user", "content": prompt}]
             logger.debug("LLM positive match prompt", prompt=prompt)
             response = self._llm_client.complete(messages, max_tokens=1024)
-            logger.info("LLM positive match response", response=response)
+            logger.debug("LLM positive match response", response=response)
             return "yes" in response.lower()
         except Exception as e:
             logger.error("LLM positive match failed", error=str(e))
@@ -1185,7 +1195,7 @@ Only reply YES or NO."""
             messages = [{"role": "user", "content": prompt}]
             logger.debug("LLM cart comparison prompt", prompt=prompt)
             response = self._llm_client.complete(messages, max_tokens=1024)
-            logger.info("LLM cart comparison response", response=response)
+            logger.debug("LLM cart comparison response", response=response)
             match = "yes" in response.lower()
             return match, "LLM confirmed match" if match else "LLM rejected match"
         except Exception as e:
