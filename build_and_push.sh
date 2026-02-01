@@ -32,6 +32,13 @@ done
 
 echo "==> Building WebShop+ images (version: $VERSION)"
 
+if [ "$PUSH" = true ]; then
+  echo "⚠️  Note: Pushing images from a local machine (especially ARM Macs) can be very slow."
+  echo "   It is highly recommended to use the GitHub Actions workflow instead."
+  echo "   See .github/workflows/docker-publish.yml or DOCKER_WORKFLOW.md for details."
+  echo ""
+fi
+
 # Determine platform
 PLATFORM="linux/amd64"
 if [ "$PUSH" = false ]; then
